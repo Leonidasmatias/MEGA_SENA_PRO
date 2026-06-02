@@ -28,6 +28,26 @@ def dezenas_menos_sorteadas(df: pd.DataFrame, limite: int = 10) -> pd.DataFrame:
     ).head(limite)
 
 
+def ultimos_concursos(df: pd.DataFrame, quantidade: int) -> pd.DataFrame:
+    return df.sort_values("Concurso", ascending=False).head(quantidade)
+
+
+def dezenas_mais_sorteadas_ultimos_concursos(
+    df: pd.DataFrame,
+    quantidade_concursos: int,
+    limite: int = 10,
+) -> pd.DataFrame:
+    return dezenas_mais_sorteadas(ultimos_concursos(df, quantidade_concursos), limite=limite)
+
+
+def dezenas_menos_sorteadas_ultimos_concursos(
+    df: pd.DataFrame,
+    quantidade_concursos: int,
+    limite: int = 10,
+) -> pd.DataFrame:
+    return dezenas_menos_sorteadas(ultimos_concursos(df, quantidade_concursos), limite=limite)
+
+
 def dezenas_atrasadas(df: pd.DataFrame) -> pd.DataFrame:
     ultimo_concurso = int(df["Concurso"].astype(int).max())
     registros = []

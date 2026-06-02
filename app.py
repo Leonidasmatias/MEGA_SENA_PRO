@@ -6,7 +6,9 @@ import streamlit as st
 from src.carregar_dados import CAMINHO_BASE_PADRAO, carregar_base, carregar_upload
 from src.estatisticas import (
     dezenas_atrasadas,
+    dezenas_mais_sorteadas_ultimos_concursos,
     dezenas_mais_sorteadas,
+    dezenas_menos_sorteadas_ultimos_concursos,
     dezenas_menos_sorteadas,
     estatistica_pares_impares,
     estatistica_soma_dezenas,
@@ -110,6 +112,33 @@ def render_analise_avancada(df: pd.DataFrame) -> None:
         st.dataframe(padrao["dezenas mais atrasadas"], width="stretch", hide_index=True)
 
 
+def render_dezenas_quentes_frias(df: pd.DataFrame) -> None:
+    mais_20 = dezenas_mais_sorteadas_ultimos_concursos(
+        df,
+        quantidade_concursos=20,
+        limite=10,
+    )
+    mais_50 = dezenas_mais_sorteadas_ultimos_concursos(
+        df,
+        quantidade_concursos=50,
+        limite=10,
+    )
+    menos_50 = dezenas_menos_sorteadas_ultimos_concursos(
+        df,
+        quantidade_concursos=50,
+        limite=10,
+    )
+
+    st.markdown("### Top 10 dezenas mais sorteadas nos últimos 20 concursos")
+    st.dataframe(mais_20, width="stretch", hide_index=True)
+
+    st.markdown("### Top 10 dezenas mais sorteadas nos últimos 50 concursos")
+    st.dataframe(mais_50, width="stretch", hide_index=True)
+
+    st.markdown("### Top 10 dezenas menos sorteadas nos últimos 50 concursos")
+    st.dataframe(menos_50, width="stretch", hide_index=True)
+
+
 def main() -> None:
     st.title("Mega Sena Analytics")
     st.caption(
@@ -134,12 +163,13 @@ def main() -> None:
     mais = dezenas_mais_sorteadas(df, limite=10)
     menos = dezenas_menos_sorteadas(df, limite=10)
 
-    tab1, tab2, tab3, tab4 = st.tabs(
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(
         [
             "Dezenas mais sorteadas",
             "Dezenas menos sorteadas",
             "Gráfico geral",
             "Análise Avançada",
+            "Dezenas Quentes e Frias",
         ]
     )
     with tab1:
@@ -150,6 +180,8 @@ def main() -> None:
         st.plotly_chart(grafico_frequencia(df), width="stretch")
     with tab4:
         render_analise_avancada(df)
+    with tab5:
+        render_dezenas_quentes_frias(df)
 
     st.subheader("Gerador de jogos")
     st.write("Gere jogos com 6 dezenas combinando frequência histórica e aleatoriedade.")
