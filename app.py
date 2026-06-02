@@ -16,6 +16,11 @@ from src.estatisticas import (
     resumo_base,
 )
 from src.gerador_jogos import gerar_jogo
+from src.gerador_jogos import (
+    calcular_score_dezenas,
+    gerar_varios_jogos_inteligentes,
+    score_jogo,
+)
 from src.visualizacoes import grafico_frequencia
 
 
@@ -139,6 +144,47 @@ def render_dezenas_quentes_frias(df: pd.DataFrame) -> None:
     st.dataframe(menos_50, width="stretch", hide_index=True)
 
 
+def render_gerador_inteligente(df: pd.DataFrame) -> None:
+    ranking = calcular_score_dezenas(df)
+
+    st.warning("Este gerador usa estatística histórica e não garante premiação.")
+    st.markdown("### Ranking das 20 dezenas com maior score")
+    st.dataframe(ranking.head(20), width="stretch", hide_index=True)
+
+    quantidade = st.number_input(
+        "Quantidade de jogos",
+        min_value=1,
+        max_value=20,
+        value=5,
+        step=1,
+    )
+
+    if st.button("Gerar Jogo Inteligente", type="primary"):
+        st.session_state.jogos_inteligentes = gerar_varios_jogos_inteligentes(
+            df,
+            quantidade=int(quantidade),
+        )
+
+    jogos = st.session_state.get("jogos_inteligentes", [])
+    if jogos:
+        linhas = []
+        for indice, jogo in enumerate(jogos, start=1):
+            pares = sum(dezena % 2 == 0 for dezena in jogo)
+            linhas.append(
+                {
+                    "Jogo": indice,
+                    "Dezenas": " - ".join(f"{dezena:02d}" for dezena in jogo),
+                    "Score": score_jogo(df, jogo),
+                    "Soma": sum(jogo),
+                    "Pares": pares,
+                    "Ímpares": 6 - pares,
+                }
+            )
+
+        st.markdown("### Jogos gerados")
+        st.dataframe(pd.DataFrame(linhas), width="stretch", hide_index=True)
+
+
 def main() -> None:
     st.title("Mega Sena Analytics")
     st.caption(
@@ -163,13 +209,14 @@ def main() -> None:
     mais = dezenas_mais_sorteadas(df, limite=10)
     menos = dezenas_menos_sorteadas(df, limite=10)
 
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(
         [
             "Dezenas mais sorteadas",
             "Dezenas menos sorteadas",
             "Gráfico geral",
             "Análise Avançada",
             "Dezenas Quentes e Frias",
+            "Gerador Inteligente",
         ]
     )
     with tab1:
@@ -182,6 +229,8 @@ def main() -> None:
         render_analise_avancada(df)
     with tab5:
         render_dezenas_quentes_frias(df)
+    with tab6:
+        render_gerador_inteligente(df)
 
     st.subheader("Gerador de jogos")
     st.write("Gere jogos com 6 dezenas combinando frequência histórica e aleatoriedade.")
