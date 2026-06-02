@@ -3,7 +3,13 @@ from __future__ import annotations
 import pandas as pd
 import streamlit as st
 
-from src.carregar_dados import CAMINHO_BASE_PADRAO, carregar_base, carregar_upload
+from src.carregar_dados import (
+    CAMINHO_BASE_PADRAO,
+    FONTE_CAIXA_URL,
+    atualizar_base_local,
+    carregar_base,
+    carregar_upload,
+)
 from src.estatisticas import (
     dezenas_atrasadas,
     dezenas_mais_sorteadas_ultimos_concursos,
@@ -191,6 +197,22 @@ def main() -> None:
         "Análise estatística da Mega-Sena com base histórica local. "
         "As sugestões são estatísticas e não garantem premiação."
     )
+    st.info(
+        "Base histórica: dados obtidos da página oficial da CAIXA. "
+        "Consulte a fonte oficial para validação."
+    )
+    st.link_button("Conferir resultados oficiais na CAIXA", FONTE_CAIXA_URL)
+    st.caption("Este sistema utiliza estatística histórica e não possui vínculo oficial com a CAIXA.")
+
+    if st.session_state.pop("base_oficial_atualizada", False):
+        st.success("Base oficial atualizada com sucesso.")
+
+    if st.button("Atualizar base oficial"):
+        if atualizar_base_local():
+            st.session_state.base_oficial_atualizada = True
+            st.rerun()
+        else:
+            st.warning("Não foi possível atualizar pela CAIXA neste momento. Usando base local.")
 
     df = obter_dados()
     if df is None:
