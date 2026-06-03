@@ -347,14 +347,16 @@ def gerar_ranking_melhores_jogos(
     quantidade_candidatos: int = 500,
     top: int = 10,
 ) -> pd.DataFrame:
+    quantidade_candidatos = max(1, int(quantidade_candidatos))
+    top = max(1, min(int(top), quantidade_candidatos))
     score = calcular_score_dezenas(df)
     mapa_pares, mapa_trincas = _mapas_correlacao(df)
     jogos_sorteados = _jogos_sorteados(df)
     candidatos: dict[tuple[int, ...], dict[str, float]] = {}
     tentativas = 0
-    limite_tentativas = max(int(quantidade_candidatos) * 20, 1000)
+    limite_tentativas = max(quantidade_candidatos * 40, 5000)
 
-    while len(candidatos) < int(quantidade_candidatos) and tentativas < limite_tentativas:
+    while len(candidatos) < quantidade_candidatos and tentativas < limite_tentativas:
         tamanho_pool = random.choice([30, 35, 40, 45, 50, 60])
         jogo = _sortear_dezenas_ponderadas(score, tamanho_pool=tamanho_pool)
         tentativas += 1
@@ -374,7 +376,7 @@ def gerar_ranking_melhores_jogos(
 
     dezenas_ordenadas = score["Dezena"].astype(int).tolist()
     for inicio in range(0, len(dezenas_ordenadas) - 5):
-        if len(candidatos) >= int(quantidade_candidatos):
+        if len(candidatos) >= quantidade_candidatos:
             break
         jogo = sorted(dezenas_ordenadas[inicio : inicio + 6])
         if not _jogo_valido(df, jogo, jogos_sorteados, exigir_tres_pares=False):
@@ -393,7 +395,7 @@ def gerar_ranking_melhores_jogos(
 
     linhas = []
     ordenados = sorted(candidatos.items(), key=lambda item: item[1]["Score Final"], reverse=True)
-    for jogo, scores in ordenados[: int(top)]:
+    for jogo, scores in ordenados[:top]:
         score_final = scores["Score Final"]
         pares = sum(dezena % 2 == 0 for dezena in jogo)
         linhas.append(
@@ -437,11 +439,15 @@ def validar_ranking_historico(
     top: int = 10,
 ) -> dict:
     dados = df.sort_values("Concurso", ascending=True).reset_index(drop=True)
-    concursos_teste = dados.tail(min(int(quantidade_concursos), len(dados)))
+    quantidade_concursos = max(1, min(int(quantidade_concursos), len(dados)))
+    quantidade_candidatos = max(1, int(quantidade_candidatos))
+    top = max(1, min(int(top), quantidade_candidatos))
+    concursos_teste = dados.tail(quantidade_concursos)
     contagem_acertos = {acertos: 0 for acertos in range(7)}
     melhor_resultado = 0
     concursos_analisados = 0
     total_jogos = 0
+    jogos_por_concurso = 0
 
     for _, concurso_real in concursos_teste.iterrows():
         concurso = int(concurso_real["Concurso"])
@@ -459,6 +465,7 @@ def validar_ranking_historico(
 
         resultado_real = {int(concurso_real[coluna]) for coluna in COLUNAS_DEZENAS}
         concursos_analisados += 1
+        jogos_por_concurso = max(jogos_por_concurso, len(ranking))
 
         for _, linha in ranking.iterrows():
             jogo = _parse_jogo_formatado(str(linha["Jogo"]))
@@ -478,8 +485,10 @@ def validar_ranking_historico(
         "jogos_4_mais": jogos_4_mais,
         "taxa_3_mais": round((jogos_3_mais / total_jogos * 100) if total_jogos else 0.0, 2),
         "taxa_4_mais": round((jogos_4_mais / total_jogos * 100) if total_jogos else 0.0, 2),
-        "quantidade_candidatos": int(quantidade_candidatos),
-        "top": int(top),
+        "quantidade_candidatos": quantidade_candidatos,
+        "top": top,
+        "jogos_por_concurso": jogos_por_concurso,
+        "observacao": f"Validação baseada no Top {top} de {quantidade_candidatos} candidatos por concurso.",
     }
 
 

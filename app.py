@@ -278,21 +278,22 @@ def render_ranking_melhores_jogos(df: pd.DataFrame) -> None:
 
     st.divider()
     st.markdown("### Validação Histórica do Ranking")
+    st.warning("Quanto maior a quantidade de candidatos e o Top, mais demorado será o processamento.")
     validacao_concursos = st.selectbox(
         "Quantidade de concursos",
-        options=[10, 50, 100],
+        options=[10, 50, 100, 300, 500],
         index=2,
         key="validacao_ranking_concursos",
     )
     validacao_candidatos = st.selectbox(
         "Quantidade de candidatos",
-        options=[100, 500, 1000],
+        options=[100, 500, 1000, 3000, 5000],
         index=1,
         key="validacao_ranking_candidatos",
     )
     validacao_top = st.selectbox(
         "Top",
-        options=[5, 10, 20],
+        options=[5, 10, 20, 30, 50],
         index=1,
         key="validacao_ranking_top",
     )
@@ -320,6 +321,12 @@ def render_ranking_melhores_jogos(df: pd.DataFrame) -> None:
         col6, col7 = st.columns(2)
         col6.metric("Taxa 3+ %", f"{validacao['taxa_3_mais']:.2f}%")
         col7.metric("Taxa 4+ %", f"{validacao['taxa_4_mais']:.2f}%")
+
+        col8, col9, col10 = st.columns(3)
+        col8.metric("Candidatos por concurso", validacao["quantidade_candidatos"])
+        col9.metric("Top analisado", validacao["top"])
+        col10.metric("Jogos por concurso", validacao["jogos_por_concurso"])
+        st.info(validacao["observacao"])
 
 
 def render_correlacao_historica(df: pd.DataFrame) -> None:
