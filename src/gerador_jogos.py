@@ -156,3 +156,38 @@ def score_jogo(df: pd.DataFrame, jogo: list[int]) -> float:
     score = calcular_score_dezenas(df).set_index("Dezena")
     scores = [float(score.loc[int(dezena), "Score"]) for dezena in jogo]
     return round(sum(scores) / len(scores), 2)
+
+
+def validar_algoritmo_historico(df: pd.DataFrame, quantidade_concursos: int = 500) -> dict:
+    dados = df.sort_values("Concurso", ascending=True).reset_index(drop=True)
+    concursos_teste = dados.tail(min(int(quantidade_concursos), len(dados)))
+    contagem_acertos = {acertos: 0 for acertos in range(7)}
+    melhor_resultado = 0
+    total_jogos = 0
+
+    for _, concurso_real in concursos_teste.iterrows():
+        concurso = int(concurso_real["Concurso"])
+        historico = dados[dados["Concurso"].astype(int) < concurso]
+        if historico.empty:
+            continue
+
+        jogo = gerar_jogo_inteligente(historico)
+        resultado_real = {int(concurso_real[coluna]) for coluna in COLUNAS_DEZENAS}
+        acertos = len(set(jogo) & resultado_real)
+
+        contagem_acertos[acertos] += 1
+        melhor_resultado = max(melhor_resultado, acertos)
+        total_jogos += 1
+
+    jogos_3_mais = sum(contagem_acertos[acertos] for acertos in range(3, 7))
+    jogos_4_mais = sum(contagem_acertos[acertos] for acertos in range(4, 7))
+
+    return {
+        "concursos_analisados": total_jogos,
+        "total_jogos": total_jogos,
+        "melhor_resultado": melhor_resultado,
+        "jogos_3_mais": jogos_3_mais,
+        "jogos_4_mais": jogos_4_mais,
+        "taxa_3_mais": round((jogos_3_mais / total_jogos * 100) if total_jogos else 0.0, 2),
+        "taxa_4_mais": round((jogos_4_mais / total_jogos * 100) if total_jogos else 0.0, 2),
+    }

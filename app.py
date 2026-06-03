@@ -191,6 +191,54 @@ def render_gerador_inteligente(df: pd.DataFrame) -> None:
         st.dataframe(pd.DataFrame(linhas), width="stretch", hide_index=True)
 
 
+def render_backtest_historico(df: pd.DataFrame) -> None:
+    st.warning("Backtest histórico não garante resultado futuro.")
+    total_disponivel = int(len(df))
+    quantidade = st.selectbox(
+        "Quantidade de concursos",
+        options=[100, 500, 1000],
+        index=1,
+    )
+    quantidade_solicitada = int(quantidade)
+
+    if total_disponivel < quantidade_solicitada:
+        st.warning("Base possui poucos concursos para esta validação.")
+
+    if st.button("Executar Backtest", type="primary"):
+        modulo_gerador = __import__("src.gerador_jogos", fromlist=["validar_algoritmo_historico"])
+        st.session_state.backtest_historico_v1 = modulo_gerador.validar_algoritmo_historico(
+            df,
+            quantidade_concursos=quantidade_solicitada,
+        )
+        st.session_state.backtest_historico_total_disponivel = total_disponivel
+        st.session_state.backtest_historico_quantidade_solicitada = quantidade_solicitada
+
+    resultado = st.session_state.get("backtest_historico_v1")
+    if resultado:
+        total_resultado = st.session_state.get("backtest_historico_total_disponivel", total_disponivel)
+        quantidade_resultado = st.session_state.get(
+            "backtest_historico_quantidade_solicitada",
+            quantidade_solicitada,
+        )
+        col_base1, col_base2, col_base3 = st.columns(3)
+        col_base1.metric("Concursos disponíveis na base", total_resultado)
+        col_base2.metric("Quantidade solicitada", quantidade_resultado)
+        col_base3.metric("Quantidade efetivamente analisada", resultado["concursos_analisados"])
+
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Concursos analisados", resultado["concursos_analisados"])
+        col2.metric("Jogos simulados", resultado["total_jogos"])
+        col3.metric("Melhor resultado", f"{resultado['melhor_resultado']} acertos")
+
+        col4, col5 = st.columns(2)
+        col4.metric("Jogos com 3+ acertos", resultado["jogos_3_mais"])
+        col5.metric("Jogos com 4+ acertos", resultado["jogos_4_mais"])
+
+        col6, col7 = st.columns(2)
+        col6.metric("Taxa 3+ %", f"{resultado['taxa_3_mais']:.2f}%")
+        col7.metric("Taxa 4+ %", f"{resultado['taxa_4_mais']:.2f}%")
+
+
 def main() -> None:
     st.title("Mega Sena Analytics")
     st.caption(
@@ -231,7 +279,7 @@ def main() -> None:
     mais = dezenas_mais_sorteadas(df, limite=10)
     menos = dezenas_menos_sorteadas(df, limite=10)
 
-    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(
         [
             "Dezenas mais sorteadas",
             "Dezenas menos sorteadas",
@@ -239,6 +287,7 @@ def main() -> None:
             "Análise Avançada",
             "Dezenas Quentes e Frias",
             "Gerador Inteligente",
+            "Backtest Histórico",
         ]
     )
     with tab1:
@@ -253,6 +302,8 @@ def main() -> None:
         render_dezenas_quentes_frias(df)
     with tab6:
         render_gerador_inteligente(df)
+    with tab7:
+        render_backtest_historico(df)
 
     st.subheader("Gerador de jogos")
     st.write("Gere jogos com 6 dezenas combinando frequência histórica e aleatoriedade.")
