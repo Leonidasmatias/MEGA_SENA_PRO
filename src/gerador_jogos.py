@@ -487,7 +487,7 @@ def validar_ranking_historico(
         "taxa_4_mais": round((jogos_4_mais / total_jogos * 100) if total_jogos else 0.0, 2),
         "quantidade_candidatos": quantidade_candidatos,
         "top": top,
-        "jogos_por_concurso": jogos_por_concurso,
+        "jogos_por_concurso": int(top),
         "observacao": f"Validação baseada no Top {top} de {quantidade_candidatos} candidatos por concurso.",
     }
 
