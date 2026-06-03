@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import pandas as pd
-import plotly.express as px
 import streamlit as st
 
 from src.carregar_dados import (
@@ -24,12 +23,9 @@ from src.estatisticas import (
 )
 from src.gerador_jogos import gerar_jogo
 from src.gerador_jogos import (
-    backtest_completo,
     calcular_score_dezenas,
-    dados_grafico_backtest,
     gerar_varios_jogos_inteligentes,
     score_jogo,
-    validar_algoritmo_historico,
 )
 from src.visualizacoes import grafico_frequencia
 
@@ -195,61 +191,6 @@ def render_gerador_inteligente(df: pd.DataFrame) -> None:
         st.dataframe(pd.DataFrame(linhas), width="stretch", hide_index=True)
 
 
-def render_backtest_historico(df: pd.DataFrame) -> None:
-    st.warning("Backtest histórico não garante resultado futuro.")
-    quantidade = st.selectbox(
-        "Quantidade de concursos para o backtest",
-        options=[100, 300, 500],
-        index=2,
-    )
-
-    if st.button("Executar Backtest Histórico", type="primary"):
-        st.session_state.backtest_historico_validacao = validar_algoritmo_historico(
-            df,
-            quantidade_concursos=int(quantidade),
-        )
-        st.session_state.backtest_historico_tabela = backtest_completo(
-            df,
-            quantidade_concursos=int(quantidade),
-        )
-        st.session_state.backtest_historico_grafico = dados_grafico_backtest(
-            df,
-            quantidade_concursos=int(quantidade),
-        )
-
-    resultado = st.session_state.get("backtest_historico_validacao")
-    tabela = st.session_state.get("backtest_historico_tabela")
-    grafico = st.session_state.get("backtest_historico_grafico")
-
-    if resultado:
-        col1, col2, col3 = st.columns(3)
-        col1.metric("Concursos analisados", resultado["concursos analisados"])
-        col2.metric("Total de jogos simulados", resultado["total de jogos simulados"])
-        col3.metric("Melhor resultado", f"{resultado['melhor resultado']} acertos")
-
-        cols_acertos = st.columns(7)
-        for acertos, coluna in enumerate(cols_acertos):
-            chave = "quantidade de 1 acerto" if acertos == 1 else f"quantidade de {acertos} acertos"
-            coluna.metric(f"{acertos} acertos", resultado[chave])
-
-        col_taxa_3, col_taxa_4 = st.columns(2)
-        col_taxa_3.metric("Taxa 3+ acertos", f"{resultado['taxa de jogos com 3+ acertos']:.2f}%")
-        col_taxa_4.metric("Taxa 4+ acertos", f"{resultado['taxa de jogos com 4+ acertos']:.2f}%")
-
-    if tabela is not None:
-        st.markdown("### 20 melhores resultados do backtest")
-        st.dataframe(tabela, width="stretch", hide_index=True)
-
-    if grafico is not None and not grafico.empty:
-        figura = px.bar(
-            grafico,
-            x="Concurso",
-            y="Acertos",
-            title="Acertos por Concurso no Backtest",
-        )
-        st.plotly_chart(figura, width="stretch")
-
-
 def main() -> None:
     st.title("Mega Sena Analytics")
     st.caption(
@@ -290,7 +231,7 @@ def main() -> None:
     mais = dezenas_mais_sorteadas(df, limite=10)
     menos = dezenas_menos_sorteadas(df, limite=10)
 
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(
         [
             "Dezenas mais sorteadas",
             "Dezenas menos sorteadas",
@@ -298,7 +239,6 @@ def main() -> None:
             "Análise Avançada",
             "Dezenas Quentes e Frias",
             "Gerador Inteligente",
-            "Backtest Histórico",
         ]
     )
     with tab1:
@@ -313,8 +253,6 @@ def main() -> None:
         render_dezenas_quentes_frias(df)
     with tab6:
         render_gerador_inteligente(df)
-    with tab7:
-        render_backtest_historico(df)
 
     st.subheader("Gerador de jogos")
     st.write("Gere jogos com 6 dezenas combinando frequência histórica e aleatoriedade.")
