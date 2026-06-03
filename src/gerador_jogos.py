@@ -156,3 +156,78 @@ def score_jogo(df: pd.DataFrame, jogo: list[int]) -> float:
     score = calcular_score_dezenas(df).set_index("Dezena")
     scores = [float(score.loc[int(dezena), "Score"]) for dezena in jogo]
     return round(sum(scores) / len(scores), 2)
+
+
+def _formatar_dezenas(dezenas: list[int] | set[int]) -> str:
+    return " - ".join(f"{int(dezena):02d}" for dezena in sorted(dezenas))
+
+
+def _simular_backtest_historico(df: pd.DataFrame, quantidade_concursos: int = 500) -> pd.DataFrame:
+    dados = df.sort_values("Concurso", ascending=True).reset_index(drop=True)
+    quantidade_teste = min(int(quantidade_concursos), len(dados))
+    concursos_teste = dados.tail(quantidade_teste)
+    registros = []
+
+    for _, concurso_real in concursos_teste.iterrows():
+        concurso = int(concurso_real["Concurso"])
+        historico = dados[dados["Concurso"].astype(int) < concurso]
+        if historico.empty:
+            continue
+
+        jogo = gerar_jogo_inteligente(historico)
+        resultado_real = {int(concurso_real[coluna]) for coluna in COLUNAS_DEZENAS}
+        acertos = len(set(jogo) & resultado_real)
+        registros.append(
+            {
+                "Concurso": concurso,
+                "Data": concurso_real["Data"],
+                "Jogo gerado": _formatar_dezenas(jogo),
+                "Resultado oficial": _formatar_dezenas(resultado_real),
+                "Acertos": acertos,
+                "Score do jogo": score_jogo(historico, jogo),
+            }
+        )
+
+    return pd.DataFrame(
+        registros,
+        columns=["Concurso", "Data", "Jogo gerado", "Resultado oficial", "Acertos", "Score do jogo"],
+    )
+
+
+def validar_algoritmo_historico(df: pd.DataFrame, quantidade_concursos: int = 500) -> dict:
+    simulacao = _simular_backtest_historico(df, quantidade_concursos)
+    total_jogos = int(len(simulacao))
+    contagem = simulacao["Acertos"].value_counts().to_dict() if total_jogos else {}
+    resultados = {acertos: int(contagem.get(acertos, 0)) for acertos in range(7)}
+    melhor_resultado = int(simulacao["Acertos"].max()) if total_jogos else 0
+    jogos_3_mais = sum(resultados[acertos] for acertos in range(3, 7))
+    jogos_4_mais = sum(resultados[acertos] for acertos in range(4, 7))
+
+    return {
+        "concursos analisados": total_jogos,
+        "total de jogos simulados": total_jogos,
+        "quantidade de 0 acertos": resultados[0],
+        "quantidade de 1 acerto": resultados[1],
+        "quantidade de 2 acertos": resultados[2],
+        "quantidade de 3 acertos": resultados[3],
+        "quantidade de 4 acertos": resultados[4],
+        "quantidade de 5 acertos": resultados[5],
+        "quantidade de 6 acertos": resultados[6],
+        "melhor resultado": melhor_resultado,
+        "taxa de jogos com 3+ acertos": round((jogos_3_mais / total_jogos * 100) if total_jogos else 0.0, 2),
+        "taxa de jogos com 4+ acertos": round((jogos_4_mais / total_jogos * 100) if total_jogos else 0.0, 2),
+    }
+
+
+def backtest_completo(df: pd.DataFrame, quantidade_concursos: int = 500) -> pd.DataFrame:
+    simulacao = _simular_backtest_historico(df, quantidade_concursos)
+    if simulacao.empty:
+        return simulacao
+    return simulacao.sort_values(["Acertos", "Concurso"], ascending=[False, False]).head(20).reset_index(drop=True)
+
+
+def dados_grafico_backtest(df: pd.DataFrame, quantidade_concursos: int = 500) -> pd.DataFrame:
+    simulacao = _simular_backtest_historico(df, quantidade_concursos)
+    if simulacao.empty:
+        return pd.DataFrame(columns=["Concurso", "Data", "Acertos"])
+    return simulacao[["Concurso", "Data", "Acertos"]].sort_values("Concurso").reset_index(drop=True)
