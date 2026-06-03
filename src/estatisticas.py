@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from collections import Counter
+from itertools import combinations
+
 import pandas as pd
 
 from src.carregar_dados import COLUNAS_DEZENAS
@@ -26,6 +29,60 @@ def dezenas_menos_sorteadas(df: pd.DataFrame, limite: int = 10) -> pd.DataFrame:
         ["Frequência", "Dezena"],
         ascending=[True, True],
     ).head(limite)
+
+
+def pares_mais_frequentes(df: pd.DataFrame, limite: int = 20) -> pd.DataFrame:
+    contador: Counter[tuple[int, int]] = Counter()
+    for linha in df[COLUNAS_DEZENAS].to_numpy():
+        dezenas = sorted(int(dezena) for dezena in linha)
+        contador.update(combinations(dezenas, 2))
+
+    registros = [
+        {
+            "Par": f"{par[0]:02d} - {par[1]:02d}",
+            "Dezena 1": par[0],
+            "Dezena 2": par[1],
+            "Frequência": frequencia,
+        }
+        for par, frequencia in contador.most_common(limite)
+    ]
+    return pd.DataFrame(registros, columns=["Par", "Dezena 1", "Dezena 2", "Frequência"])
+
+
+def trincas_mais_frequentes(df: pd.DataFrame, limite: int = 20) -> pd.DataFrame:
+    contador: Counter[tuple[int, int, int]] = Counter()
+    for linha in df[COLUNAS_DEZENAS].to_numpy():
+        dezenas = sorted(int(dezena) for dezena in linha)
+        contador.update(combinations(dezenas, 3))
+
+    registros = [
+        {
+            "Trinca": f"{trinca[0]:02d} - {trinca[1]:02d} - {trinca[2]:02d}",
+            "Dezena 1": trinca[0],
+            "Dezena 2": trinca[1],
+            "Dezena 3": trinca[2],
+            "Frequência": frequencia,
+        }
+        for trinca, frequencia in contador.most_common(limite)
+    ]
+    return pd.DataFrame(registros, columns=["Trinca", "Dezena 1", "Dezena 2", "Dezena 3", "Frequência"])
+
+
+def mapa_correlacao_dezenas(df: pd.DataFrame) -> pd.DataFrame:
+    contador: Counter[tuple[int, int]] = Counter()
+    for linha in df[COLUNAS_DEZENAS].to_numpy():
+        dezenas = sorted(int(dezena) for dezena in linha)
+        contador.update(combinations(dezenas, 2))
+
+    registros = [
+        {
+            "Dezena A": dezena_a,
+            "Dezena B": dezena_b,
+            "Frequência conjunta": int(frequencia),
+        }
+        for (dezena_a, dezena_b), frequencia in sorted(contador.items())
+    ]
+    return pd.DataFrame(registros, columns=["Dezena A", "Dezena B", "Frequência conjunta"])
 
 
 def ultimos_concursos(df: pd.DataFrame, quantidade: int) -> pd.DataFrame:

@@ -239,6 +239,105 @@ def render_backtest_historico(df: pd.DataFrame) -> None:
         col7.metric("Taxa 4+ %", f"{resultado['taxa_4_mais']:.2f}%")
 
 
+def render_ranking_melhores_jogos(df: pd.DataFrame) -> None:
+    st.warning("Ranking estatístico não garante premiação.")
+    quantidade_candidatos = st.selectbox(
+        "Quantidade de candidatos",
+        options=[100, 500, 1000],
+        index=1,
+    )
+    top = st.selectbox(
+        "Top",
+        options=[5, 10, 20],
+        index=1,
+    )
+
+    if st.button("Gerar Ranking", type="primary"):
+        modulo_gerador = __import__("src.gerador_jogos", fromlist=["gerar_ranking_melhores_jogos"])
+        st.session_state.ranking_melhores_jogos = modulo_gerador.gerar_ranking_melhores_jogos(
+            df,
+            quantidade_candidatos=int(quantidade_candidatos),
+            top=int(top),
+        )
+
+    ranking = st.session_state.get("ranking_melhores_jogos")
+    if ranking is not None and not ranking.empty:
+        melhor_jogo = ranking.iloc[0]
+        st.metric(
+            "Melhor jogo",
+            melhor_jogo["Jogo"],
+            f"Score {float(melhor_jogo['Score']):.2f} - {melhor_jogo['Classificação']}",
+        )
+        st.dataframe(ranking, width="stretch", hide_index=True)
+        st.download_button(
+            "Baixar CSV",
+            data=ranking.to_csv(index=False).encode("utf-8-sig"),
+            file_name="ranking_melhores_jogos.csv",
+            mime="text/csv",
+        )
+
+    st.divider()
+    st.markdown("### Validação Histórica do Ranking")
+    validacao_concursos = st.selectbox(
+        "Quantidade de concursos",
+        options=[10, 50, 100],
+        index=2,
+        key="validacao_ranking_concursos",
+    )
+    validacao_candidatos = st.selectbox(
+        "Quantidade de candidatos",
+        options=[100, 500, 1000],
+        index=1,
+        key="validacao_ranking_candidatos",
+    )
+    validacao_top = st.selectbox(
+        "Top",
+        options=[5, 10, 20],
+        index=1,
+        key="validacao_ranking_top",
+    )
+
+    if st.button("Validar Ranking Histórico", key="validar_ranking_historico"):
+        modulo_gerador = __import__("src.gerador_jogos", fromlist=["validar_ranking_historico"])
+        st.session_state.validacao_ranking_historico = modulo_gerador.validar_ranking_historico(
+            df,
+            quantidade_concursos=int(validacao_concursos),
+            quantidade_candidatos=int(validacao_candidatos),
+            top=int(validacao_top),
+        )
+
+    validacao = st.session_state.get("validacao_ranking_historico")
+    if validacao is not None:
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Concursos analisados", validacao["concursos_analisados"])
+        col2.metric("Total de jogos", validacao["total_jogos"])
+        col3.metric("Melhor resultado", f"{validacao['melhor_resultado']} acertos")
+
+        col4, col5 = st.columns(2)
+        col4.metric("Jogos com 3+ acertos", validacao["jogos_3_mais"])
+        col5.metric("Jogos com 4+ acertos", validacao["jogos_4_mais"])
+
+        col6, col7 = st.columns(2)
+        col6.metric("Taxa 3+ %", f"{validacao['taxa_3_mais']:.2f}%")
+        col7.metric("Taxa 4+ %", f"{validacao['taxa_4_mais']:.2f}%")
+
+
+def render_correlacao_historica(df: pd.DataFrame) -> None:
+    modulo_estatisticas = __import__(
+        "src.estatisticas",
+        fromlist=["pares_mais_frequentes", "trincas_mais_frequentes", "mapa_correlacao_dezenas"],
+    )
+
+    st.markdown("### Top 20 pares mais frequentes")
+    st.dataframe(modulo_estatisticas.pares_mais_frequentes(df, limite=20), width="stretch", hide_index=True)
+
+    st.markdown("### Top 20 trincas mais frequentes")
+    st.dataframe(modulo_estatisticas.trincas_mais_frequentes(df, limite=20), width="stretch", hide_index=True)
+
+    st.markdown("### Correlação entre dezenas")
+    st.dataframe(modulo_estatisticas.mapa_correlacao_dezenas(df), width="stretch", hide_index=True)
+
+
 def main() -> None:
     st.title("Mega Sena Analytics")
     st.caption(
@@ -279,7 +378,7 @@ def main() -> None:
     mais = dezenas_mais_sorteadas(df, limite=10)
     menos = dezenas_menos_sorteadas(df, limite=10)
 
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs(
         [
             "Dezenas mais sorteadas",
             "Dezenas menos sorteadas",
@@ -287,6 +386,8 @@ def main() -> None:
             "Análise Avançada",
             "Dezenas Quentes e Frias",
             "Gerador Inteligente",
+            "Ranking dos Melhores Jogos",
+            "Correlação Histórica",
             "Backtest Histórico",
         ]
     )
@@ -303,6 +404,10 @@ def main() -> None:
     with tab6:
         render_gerador_inteligente(df)
     with tab7:
+        render_ranking_melhores_jogos(df)
+    with tab8:
+        render_correlacao_historica(df)
+    with tab9:
         render_backtest_historico(df)
 
     st.subheader("Gerador de jogos")
