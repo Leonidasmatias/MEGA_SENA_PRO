@@ -1163,6 +1163,67 @@ def validar_base_historica_atual() -> dict:
     return melhor
 
 
+def carregar_dados_ativos_sem_upload() -> pd.DataFrame | None:
+    df_upload = st.session_state.get("base_upload_temporaria")
+    if isinstance(df_upload, pd.DataFrame) and not df_upload.empty:
+        return df_upload
+
+    try:
+        info_base = validar_base_historica_atual()
+        df_local = info_base.get("dataframe")
+        if not isinstance(df_local, pd.DataFrame) or df_local.empty:
+            df_local = carregar_base(CAMINHO_BASE_PADRAO)
+            info_base.update(
+                {
+                    "total_concursos": int(len(df_local)),
+                    "ultimo_concurso": _ultimo_concurso(df_local),
+                    "data_ultimo_concurso": str(df_local.sort_values("Concurso", ascending=False).iloc[0]["Data"]),
+                    "status": "Fallback para base padrao",
+                }
+            )
+        st.session_state.base_historica_atual = {chave: valor for chave, valor in info_base.items() if chave != "dataframe"}
+        atualizar_estado_base(df_local, f"Base ativa: {info_base.get('caminho', CAMINHO_BASE_PADRAO)}")
+        return df_local
+    except FileNotFoundError:
+        mensagem = "Arquivo dados/mega_sena_historico.csv nao encontrado. Inclua a base historica no projeto antes do deploy."
+        registrar_mensagem("error", mensagem)
+        st.error(mensagem)
+    except Exception as erro:
+        mensagem = f"Nao foi possivel carregar a base historica: {erro}"
+        registrar_mensagem("error", mensagem)
+        st.error(mensagem)
+    return None
+
+
+def render_upload_csv_base_topo() -> None:
+    upload = st.file_uploader(
+        "Upload CSV",
+        type=["csv"],
+        key="upload_csv_base",
+        help="Use colunas: Concurso, Data, D1, D2, D3, D4, D5, D6.",
+    )
+    if upload is None:
+        return
+
+    try:
+        df_upload = carregar_upload(upload)
+        st.session_state.base_upload_temporaria = df_upload
+        atualizar_estado_base(df_upload, f"Upload CSV temporario: {upload.name}")
+        registrar_mensagem("success", "Upload CSV carregado como base temporaria da sessao.")
+        st.session_state.base_historica_atual = {
+            "caminho": f"upload://{upload.name}",
+            "total_concursos": int(len(df_upload)),
+            "ultimo_concurso": _ultimo_concurso(df_upload),
+            "data_ultimo_concurso": str(df_upload.sort_values("Concurso", ascending=False).iloc[0]["Data"]),
+            "status": "Upload CSV em uso nesta sessao",
+        }
+        st.rerun()
+    except Exception as erro:
+        mensagem = f"Nao foi possivel carregar o upload CSV: {erro}"
+        registrar_mensagem("error", mensagem)
+        st.error(mensagem)
+
+
 def obter_dados() -> pd.DataFrame | None:
     upload = st.file_uploader(
         "Upload CSV",
@@ -2941,28 +3002,30 @@ def main() -> None:
             registrar_mensagem("error", f"Falha ao atualizar base oficial: {erro}")
             st.error(f"Falha ao atualizar base oficial: {erro}")
 
-    df = obter_dados()
+    df = carregar_dados_ativos_sem_upload()
     if df is None:
         st.stop()
 
-    resumo = resumo_base(df)
-    resultado_topo_container = st.container()
-    cards_slot = st.container()
-    base_slot = st.container()
-    premiacao_slot = st.container()
-    conteudo_slot = st.container()
-
     secao = render_secao_ativa()
-    mais = dezenas_mais_sorteadas(df, limite=10)
-    menos = dezenas_menos_sorteadas(df, limite=10)
-
-    with resultado_topo_container:
+    area_resultado_topo = st.container()
+    with area_resultado_topo:
         if secao == "Geração de Jogos":
             render_card_resultado_topo("Resultado gerado", "Geração de Jogos")
             render_gerador_inteligente(df)
         elif secao in {"Previsão do Sorteio", "Previsão do Próximo Concurso"}:
             render_card_resultado_topo("Pagamento PIX", "Previsão do Próximo Concurso")
             render_previsao_concurso_alvo(df)
+
+    render_upload_csv_base_topo()
+
+    resumo = resumo_base(df)
+    cards_slot = st.container()
+    base_slot = st.container()
+    premiacao_slot = st.container()
+    conteudo_slot = st.container()
+
+    mais = dezenas_mais_sorteadas(df, limite=10)
+    menos = dezenas_menos_sorteadas(df, limite=10)
 
     with cards_slot:
         render_cards_dashboard_v2(df)
@@ -3045,4 +3108,5 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
 
