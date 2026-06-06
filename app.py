@@ -20,7 +20,7 @@ from src.carregar_dados import (
     validar_base,
 )
 from src.mercado_pago_pix import consultar_pagamento_pix, criar_pagamento_pix, extrair_dados_pix
-from src.pagamentos import calcular_valor_pagamento, registrar_pagamento
+from src.pagamentos import calcular_valor_pagamento, email_cliente_valido, registrar_pagamento
 from src.estatisticas import (
     dezenas_atrasadas,
     dezenas_mais_sorteadas_ultimos_concursos,
@@ -724,6 +724,16 @@ def render_gate_pagamento_pix(chave: str, concurso_alvo: int, quantidade_palpite
     col1.metric("Palpites", quantidade)
     col2.metric("Valor por palpite", "R$ 1,00")
     col3.metric("Valor total", f"R$ {valor_total:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+    email_cliente = st.text_input(
+        "Digite seu e-mail para receber a cobrança PIX",
+        value=str(estado.get("email_cliente", "")),
+        key=f"email_cliente_pix_{chave}",
+    ).strip()
+    email_valido = email_cliente_valido(email_cliente)
+    if not email_cliente:
+        st.caption("E-mail obrigatório para gerar a cobrança PIX.")
+    if email_cliente and not email_valido:
+        st.error("Informe um e-mail válido para criar a cobrança PIX.")
 
     aprovado = bool(estado.get("aprovado"))
     if aprovado:
@@ -732,15 +742,20 @@ def render_gate_pagamento_pix(chave: str, concurso_alvo: int, quantidade_palpite
         st.success(f"Pagamento aprovado. {st.session_state.palpites_liberados} palpite(s) liberado(s).")
         return True
 
-    if st.button("Criar cobrança PIX", key=f"criar_pix_{chave}", type="primary"):
+    if st.button("Criar cobrança PIX", key=f"criar_pix_{chave}", type="primary", disabled=not email_valido):
         token = obter_token_mercado_pago()
         try:
+            if not email_cliente:
+                raise ValueError("Digite seu e-mail para receber a cobrança PIX.")
+            if not email_valido:
+                raise ValueError("payer.email must be a valid email.")
             if not token:
                 raise ValueError("MERCADO_PAGO_ACCESS_TOKEN não configurado em st.secrets.")
             resposta = criar_pagamento_pix(
                 token,
                 valor_total,
                 f"{descricao} - {quantidade} palpite(s) - concurso {concurso_alvo}",
+                email_cliente,
             )
             dados_pix = extrair_dados_pix(resposta)
             estado.update(
@@ -750,6 +765,7 @@ def render_gate_pagamento_pix(chave: str, concurso_alvo: int, quantidade_palpite
                     "concurso_alvo": int(concurso_alvo),
                     "quantidade_palpites": quantidade,
                     "valor_total": valor_total,
+                    "email_cliente": email_cliente,
                     "aprovado": dados_pix["status"] == "approved",
                 }
             )
@@ -789,6 +805,7 @@ def render_gate_pagamento_pix(chave: str, concurso_alvo: int, quantidade_palpite
                 "concurso_alvo": int(concurso_alvo),
                 "quantidade_palpites": quantidade,
                 "valor_total": valor_total,
+                "email_cliente": email_cliente if email_valido else "",
             }
         )
         registrar_pagamento(concurso_alvo, quantidade, valor_total, "approved_simulado", payment_id, quantidade)

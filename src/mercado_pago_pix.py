@@ -12,10 +12,13 @@ def criar_pagamento_pix(
     access_token: str,
     valor_total: float,
     descricao: str,
-    email_pagador: str = "cliente@mega-sena-pro.local",
+    email_pagador: str,
 ) -> dict:
     if not access_token:
         raise ValueError("MERCADO_PAGO_ACCESS_TOKEN nao configurado.")
+    email_pagador = str(email_pagador or "").strip()
+    if not email_pagador:
+        raise ValueError("payer.email e obrigatorio para criar cobranca PIX.")
 
     payload = {
         "transaction_amount": round(float(valor_total), 2),

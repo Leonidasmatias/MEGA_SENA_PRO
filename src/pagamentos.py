@@ -2,16 +2,22 @@ from __future__ import annotations
 
 from datetime import datetime
 from pathlib import Path
+import re
 
 import pandas as pd
 
 
 VALOR_POR_PALPITE = 1.0
 CAMINHO_LOG_PAGAMENTOS = Path("exports") / "pagamentos.csv"
+EMAIL_REGEX = re.compile(r"^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$", re.IGNORECASE)
 
 
 def calcular_valor_pagamento(quantidade_palpites: int) -> float:
     return round(max(1, int(quantidade_palpites)) * VALOR_POR_PALPITE, 2)
+
+
+def email_cliente_valido(email: str) -> bool:
+    return bool(EMAIL_REGEX.match(str(email or "").strip()))
 
 
 def registrar_pagamento(
