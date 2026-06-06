@@ -391,55 +391,82 @@ def corrigir_interface_visual() -> None:
             vertical-align: -1px;
         }
 
-        @keyframes ledPulse {
+        @keyframes megaLed {
             0% {
-                box-shadow: 0 0 6px #22c55e, 0 0 12px #22c55e, 0 10px 24px rgba(22, 163, 74, .28) !important;
-                background: #16A34A !important;
-                transform: scale(1);
+                opacity: .75;
+                box-shadow: 0 0 8px #00FF66 !important;
             }
             50% {
-                box-shadow: 0 0 18px #00ff66, 0 0 36px #00ff66, 0 0 54px #00ff66, 0 14px 32px rgba(0, 255, 102, .32) !important;
-                background: #00C853 !important;
-                transform: scale(1.03);
+                opacity: 1;
+                box-shadow:
+                    0 0 20px #00FF66,
+                    0 0 40px #00FF66,
+                    0 0 80px #00FF66 !important;
             }
             100% {
-                box-shadow: 0 0 6px #22c55e, 0 0 12px #22c55e, 0 10px 24px rgba(22, 163, 74, .28) !important;
-                background: #16A34A !important;
-                transform: scale(1);
+                opacity: .75;
+                box-shadow: 0 0 8px #00FF66 !important;
             }
         }
 
-        .mega-previsao-menu div.stButton > button {
-            background: #16A34A !important;
-            color: #FFFFFF !important;
-            border: 2px solid #00ff66 !important;
-            border-radius: 14px !important;
-            min-height: 58px !important;
-            font-size: 17px !important;
-            font-weight: 900 !important;
-            letter-spacing: .02em !important;
-            box-shadow: 0 0 8px #22c55e, 0 0 18px rgba(34, 197, 94, .75) !important;
-            animation: ledPulse 1.4s infinite ease-in-out;
-        }
-
-        .mega-previsao-menu div.stButton > button * {
-            color: #FFFFFF !important;
-            font-weight: 900 !important;
-        }
-
-        .mega-previsao-menu div.stButton > button:hover {
+        .mega-previsao-menu div.stButton > button,
+        .st-key-menu_secao_previsao_cta button,
+        div[data-testid="stVerticalBlock"] .st-key-menu_secao_previsao_cta button {
             background: #00C853 !important;
             color: #FFFFFF !important;
-            border-color: #86EFAC !important;
-            transform: scale(1.035);
+            border: 3px solid #00FF66 !important;
+            border-radius: 14px !important;
+            min-height: 70px !important;
+            height: auto !important;
+            font-size: 19px !important;
+            font-weight: 800 !important;
+            letter-spacing: .02em !important;
+            box-shadow:
+                0 0 10px #00FF66,
+                0 0 20px #00FF66,
+                0 0 40px #00FF66,
+                0 0 60px rgba(0,255,102,.7) !important;
+            animation: megaLed 1s infinite !important;
+            transition: transform .18s ease, filter .18s ease !important;
+        }
+
+        .mega-previsao-menu div.stButton > button *,
+        .st-key-menu_secao_previsao_cta button *,
+        div[data-testid="stVerticalBlock"] .st-key-menu_secao_previsao_cta button * {
+            color: #FFFFFF !important;
+            font-weight: 800 !important;
+        }
+
+        .mega-previsao-menu div.stButton > button:hover,
+        .st-key-menu_secao_previsao_cta button:hover,
+        div[data-testid="stVerticalBlock"] .st-key-menu_secao_previsao_cta button:hover {
+            background: #00C853 !important;
+            color: #FFFFFF !important;
+            border-color: #00FF66 !important;
+            transform: scale(1.03);
+            filter: brightness(1.04);
+        }
+
+        .mega-previsao-badge {
+            display: inline-block;
+            margin: 8px auto 8px auto;
+            padding: 7px 14px;
+            border-radius: 999px;
+            background: #FEF3C7;
+            color: #92400E;
+            border: 1px solid #F59E0B;
+            font-size: 13px;
+            font-weight: 900;
+            text-align: center;
+            box-shadow: 0 8px 18px rgba(245, 158, 11, .16);
         }
 
         .mega-previsao-hint {
-            margin: -4px 0 14px 0;
+            margin: 4px 0 14px 0;
             text-align: center;
             color: #065F46;
-            font-size: 13px;
-            font-weight: 800;
+            font-size: 14px;
+            font-weight: 850;
         }
 
         .ux-previsao-card {
@@ -476,8 +503,11 @@ def corrigir_interface_visual() -> None:
         }
 
         @media (max-width: 760px) {
-            .mega-previsao-menu div.stButton > button {
-                min-height: 62px !important;
+            .mega-previsao-menu div.stButton > button,
+            .st-key-menu_secao_previsao_cta button,
+            div[data-testid="stVerticalBlock"] .st-key-menu_secao_previsao_cta button {
+                width: 100% !important;
+                min-height: 80px !important;
                 font-size: 15px !important;
                 white-space: normal !important;
             }
@@ -565,13 +595,14 @@ def render_menu_visual() -> None:
                 st.session_state.aba_ativa = secao
                 st.rerun()
     st.markdown('<div class="mega-previsao-menu">', unsafe_allow_html=True)
+    st.markdown('<div style="text-align:center;"><span class="mega-previsao-badge">🔥 MAIS ACESSADO</span></div>', unsafe_allow_html=True)
     ativo_previsao = st.session_state.get("aba_ativa") == "Previsão do Próximo Concurso"
     label_previsao = "• 🎯 PREVER PRÓXIMO SORTEIO" if ativo_previsao else "🎯 PREVER PRÓXIMO SORTEIO"
-    if st.button(label_previsao, key="menu_secao_Previsão do Próximo Concurso", use_container_width=True):
+    if st.button(label_previsao, key="menu_secao_previsao_cta", use_container_width=True):
         st.session_state.aba_ativa = "Previsão do Próximo Concurso"
         st.rerun()
     st.markdown(
-        '<div class="mega-previsao-hint">Clique aqui para gerar seus números do próximo sorteio</div>',
+        '<div class="mega-previsao-hint">Ganhe acesso à previsão do próximo prêmio de R$ 32 milhões</div>',
         unsafe_allow_html=True,
     )
     st.markdown("</div>", unsafe_allow_html=True)
