@@ -391,6 +391,87 @@ def corrigir_interface_visual() -> None:
             vertical-align: -1px;
         }
 
+        @keyframes pulseGreen {
+            0% { box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.7), 0 10px 24px rgba(22, 163, 74, .30) !important; }
+            70% { box-shadow: 0 0 0 14px rgba(22, 163, 74, 0), 0 10px 24px rgba(22, 163, 74, .30) !important; }
+            100% { box-shadow: 0 0 0 0 rgba(22, 163, 74, 0), 0 10px 24px rgba(22, 163, 74, .30) !important; }
+        }
+
+        .mega-previsao-menu div.stButton > button {
+            background: #16A34A !important;
+            color: #FFFFFF !important;
+            border: 0 !important;
+            border-radius: 999px !important;
+            min-height: 50px !important;
+            font-size: 16px !important;
+            font-weight: 900 !important;
+            box-shadow: 0 10px 24px rgba(22, 163, 74, .30) !important;
+            animation: pulseGreen 2.4s infinite;
+        }
+
+        .mega-previsao-menu div.stButton > button * {
+            color: #FFFFFF !important;
+        }
+
+        .mega-previsao-menu div.stButton > button:hover {
+            background: #15803D !important;
+            color: #FFFFFF !important;
+            transform: translateY(-1px);
+        }
+
+        .ux-previsao-card {
+            background: linear-gradient(135deg, #ECFDF5 0%, #FFFFFF 62%, #F0FDF4 100%);
+            border: 1px solid #BBF7D0;
+            border-left: 8px solid #16A34A;
+            border-radius: 18px;
+            padding: 26px;
+            margin: 8px 0 18px 0;
+            box-shadow: 0 16px 34px rgba(22, 163, 74, .16);
+        }
+
+        .ux-previsao-title {
+            color: #065F46;
+            font-size: 28px;
+            font-weight: 900;
+            line-height: 1.15;
+            margin-bottom: 8px;
+        }
+
+        .ux-previsao-subtitle {
+            color: #111827;
+            font-size: 18px;
+            font-weight: 850;
+            margin-bottom: 12px;
+        }
+
+        .ux-previsao-text {
+            color: #374151;
+            font-size: 16px;
+            font-weight: 650;
+            line-height: 1.55;
+            max-width: 820px;
+        }
+
+        @media (max-width: 760px) {
+            .mega-previsao-menu div.stButton > button {
+                min-height: 56px !important;
+                font-size: 15px !important;
+                white-space: normal !important;
+            }
+            .ux-previsao-card {
+                padding: 20px;
+            }
+            .ux-previsao-title {
+                font-size: 23px;
+            }
+            .ux-previsao-subtitle {
+                font-size: 16px;
+            }
+            .ux-previsao-text {
+                font-size: 15px;
+            }
+        }
+
         @media (max-width: 900px) {
             .stRadio div[role="radiogroup"] {
                 flex-direction: column !important;
@@ -446,8 +527,9 @@ def render_topo_institucional() -> None:
 
 def render_menu_visual() -> None:
     st.markdown('<div class="mega-menu-toolbar">', unsafe_allow_html=True)
-    for inicio in range(0, len(SECOES_APP), 5):
-        linha = SECOES_APP[inicio : inicio + 5]
+    secoes_normais = [secao for secao in SECOES_APP if secao != "Previsão do Próximo Concurso"]
+    for inicio in range(0, len(secoes_normais), 5):
+        linha = secoes_normais[inicio : inicio + 5]
         colunas = st.columns(len(linha))
         for coluna, secao in zip(colunas, linha):
             ativo = secao == st.session_state.get("aba_ativa", SECOES_APP[0])
@@ -455,6 +537,13 @@ def render_menu_visual() -> None:
             if coluna.button(label, key=f"menu_secao_{secao}", use_container_width=True):
                 st.session_state.aba_ativa = secao
                 st.rerun()
+    st.markdown('<div class="mega-previsao-menu">', unsafe_allow_html=True)
+    ativo_previsao = st.session_state.get("aba_ativa") == "Previsão do Próximo Concurso"
+    label_previsao = "• 🎯 Prever Próximo Sorteio" if ativo_previsao else "🎯 Prever Próximo Sorteio"
+    if st.button(label_previsao, key="menu_secao_Previsão do Próximo Concurso", use_container_width=True):
+        st.session_state.aba_ativa = "Previsão do Próximo Concurso"
+        st.rerun()
+    st.markdown("</div>", unsafe_allow_html=True)
     st.markdown("</div>", unsafe_allow_html=True)
 
 
@@ -514,6 +603,25 @@ def render_card_resultado_topo(titulo: str, subtitulo: str = "") -> None:
             </div>
             <div style="font-size: 14px; color: #64748B; font-weight: 650;">
                 {subtitulo}
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_card_ux_previsao_leigo(df: pd.DataFrame) -> None:
+    metadados = obter_metadados_concurso_alvo_previsao(df)
+    concurso = metadados.get("concurso_alvo") or obter_concurso_alvo_previsao(df)
+    premio = metadados.get("premio_estimado") or "N/D"
+    st.markdown(
+        f"""
+        <div class="ux-previsao-card">
+            <div class="ux-previsao-title">🎯 Gerar meus números para o próximo sorteio</div>
+            <div class="ux-previsao-subtitle">Concurso {concurso} • Prêmio estimado: {premio}</div>
+            <div class="ux-previsao-text">
+                Digite seu e-mail, gere o PIX de R$ 1,00 e após o pagamento o sistema libera
+                os números sugeridos para o próximo sorteio.
             </div>
         </div>
         """,
@@ -850,32 +958,43 @@ def render_gate_pagamento_pix(
     valor_total = calcular_valor_pagamento(quantidade)
     estado = estado_pagamento(chave)
     assinatura = f"{concurso_alvo}:{quantidade}:{valor_total:.2f}:{descricao}"
+    previsao_leigo = chave == "previsao"
+    nome_produto = "Previsão do Próximo Sorteio" if previsao_leigo else (funcao or descricao)
     if estado.get("assinatura") and estado.get("assinatura") != assinatura:
         resetar_pagamento(chave)
         estado = estado_pagamento(chave)
 
-    st.info(
-        "A Mega-Sena é aleatória. O pagamento libera apenas uma análise estatística, "
-        "sem garantia de acerto, prêmio ou resultado."
-    )
-    if funcao:
+    if previsao_leigo:
+        st.info("A Mega-Sena é aleatória. Estes números são uma análise estatística e não garantem prêmio.")
+        st.markdown(
+            "**Digite seu e-mail, gere o QR Code PIX de R$ 1,00 e depois clique em liberar seus números.**"
+        )
+    else:
+        st.info(
+            "A Mega-Sena é aleatória. O pagamento libera apenas uma análise estatística, "
+            "sem garantia de acerto, prêmio ou resultado."
+        )
+    if funcao and not previsao_leigo:
         st.markdown(
             f"**Para acessar {funcao}, realize o pagamento de R$ {valor_total:,.2f} via PIX.**".replace(".", ",")
         )
-    else:
+    elif not previsao_leigo:
         st.markdown(
             f"**Para gerar este palpite, realize o pagamento de R$ {valor_total:,.2f} via PIX.**".replace(".", ",")
         )
     col1, col2, col3 = st.columns(3)
-    col1.metric("Função" if funcao else "Palpites", funcao or quantidade)
+    col1.metric("Produto" if previsao_leigo else ("Função" if funcao else "Palpites"), nome_produto if previsao_leigo or funcao else quantidade)
     col2.metric("Valor", "R$ 1,00")
-    col3.metric("Valor total", f"R$ {valor_total:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+    col3.metric("Total" if previsao_leigo else "Valor total", f"R$ {valor_total:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
     email_cliente = st.text_input(
-        "Digite seu e-mail para receber a cobrança PIX",
+        "📧 Coloque seu e-mail aqui" if previsao_leigo else "Digite seu e-mail para receber a cobrança PIX",
         value=str(estado.get("email_cliente", "")),
+        placeholder="seunome@email.com" if previsao_leigo else None,
         key=f"email_cliente_pix_{chave}",
     ).strip()
     email_valido = email_cliente_valido(email_cliente)
+    if previsao_leigo:
+        st.caption("Usaremos este e-mail apenas para identificar sua compra e liberar sua previsão.")
     if not email_cliente:
         st.caption("E-mail obrigatório para gerar a cobrança PIX.")
     if email_cliente and not email_valido:
@@ -888,14 +1007,48 @@ def render_gate_pagamento_pix(
         st.session_state[f"pagamento_aprovado_{chave}"] = True
         st.session_state.pagamento_aprovado = True
         st.session_state.palpites_liberados = int(estado.get("quantidade_palpites", quantidade))
-        st.success("✅ Pagamento aprovado com sucesso.")
-        if funcao:
-            st.info(f"Pagamento aprovado. Acesso liberado para {funcao}.")
+        if previsao_leigo:
+            st.success("✅ Pagamento aprovado!\n\nSeus números foram liberados abaixo.")
         else:
+            st.success("✅ Pagamento aprovado com sucesso.")
+        if funcao and not previsao_leigo:
+            st.info(f"Pagamento aprovado. Acesso liberado para {funcao}.")
+        elif not previsao_leigo:
             st.info(f"{st.session_state.palpites_liberados} palpite(s) liberado(s).")
         return True
 
-    if st.button("Criar cobrança PIX", key=f"criar_pix_{chave}", type="primary", disabled=not email_valido):
+    texto_botao_criar = "💳 Gerar QR Code PIX de R$ 1,00" if previsao_leigo else "Criar cobrança PIX"
+    if previsao_leigo:
+        st.markdown(
+            """
+            <style>
+            div.stButton > button[kind="primary"] {
+                background:#16A34A !important;
+                color:#FFFFFF !important;
+                border:0 !important;
+                border-radius:14px !important;
+                min-height:52px !important;
+                font-size:17px !important;
+                font-weight:900 !important;
+                box-shadow:0 12px 26px rgba(22,163,74,.28) !important;
+            }
+            div.stButton > button[kind="primary"] * { color:#FFFFFF !important; }
+            div.stButton > button[kind="primary"]:hover {
+                background:#15803D !important;
+                color:#FFFFFF !important;
+                box-shadow:0 14px 30px rgba(21,128,61,.32) !important;
+            }
+            </style>
+            """,
+            unsafe_allow_html=True,
+        )
+    if st.button(
+        texto_botao_criar,
+        key=f"criar_pix_{chave}",
+        type="primary",
+        disabled=not email_valido,
+        use_container_width=previsao_leigo,
+    ):
         token = obter_token_mercado_pago()
         try:
             if not email_cliente:
@@ -1043,9 +1196,16 @@ def render_gate_pagamento_pix(
         )
         st.text_area("Código PIX copia e cola", estado["qr_code"], height=120, key=f"copia_cola_pix_{chave}")
     if estado.get("payment_id"):
-        st.caption(f"Status: Aguardando pagamento | Payment ID: {estado['payment_id']}")
-        st.info("Após o pagamento, clique em Verificar pagamento.")
-        if st.button("Verificar pagamento", key=f"verificar_pix_{chave}", type="primary"):
+        if previsao_leigo:
+            st.caption("Status: Aguardando pagamento")
+        else:
+            st.caption(f"Status: Aguardando pagamento | Payment ID: {estado['payment_id']}")
+        if previsao_leigo:
+            st.info("Após pagar o PIX, clique em Verificar pagamento para liberar seus números.")
+        else:
+            st.info("Após o pagamento, clique em Verificar pagamento.")
+        texto_verificar = "✅ Já paguei, liberar meus números" if previsao_leigo else "Verificar pagamento"
+        if st.button(texto_verificar, key=f"verificar_pix_{chave}", type="primary", use_container_width=previsao_leigo):
             token = obter_token_mercado_pago()
             try:
                 resposta = consultar_pagamento_pix(token, estado["payment_id"])
@@ -3167,6 +3327,8 @@ def main() -> None:
         secao_render = secao
         if secao in pagamentos_funcoes:
             chave_funcao, nome_funcao = pagamentos_funcoes[secao]
+            if chave_funcao == "previsao":
+                render_card_ux_previsao_leigo(df)
             if not exigir_pagamento_para_funcao(
                 chave_funcao,
                 nome_funcao,
@@ -3230,7 +3392,6 @@ def main() -> None:
             st.divider()
             render_ranking_melhores_jogos(df)
         elif secao_render in {"Previsão do Sorteio", "Previsão do Próximo Concurso"}:
-            render_card_resultado_topo("Pagamento PIX", "Previsão do Próximo Concurso")
             render_previsao_concurso_alvo(df)
     render_upload_csv_base_topo()
 
