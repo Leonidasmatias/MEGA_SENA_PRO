@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path
@@ -18,6 +19,8 @@ from src.carregar_dados import (
     carregar_upload,
     validar_base,
 )
+from src.mercado_pago_pix import consultar_pagamento_pix, criar_pagamento_pix, extrair_dados_pix
+from src.pagamentos import calcular_valor_pagamento, registrar_pagamento
 from src.estatisticas import (
     dezenas_atrasadas,
     dezenas_mais_sorteadas_ultimos_concursos,
@@ -679,6 +682,137 @@ def render_alerta_defasagem_base(df: pd.DataFrame) -> None:
             st.error(f"Falha ao atualizar e reprocessar base oficial: {erro}")
 
 
+def obter_token_mercado_pago() -> str:
+    try:
+        return str(st.secrets.get("MERCADO_PAGO_ACCESS_TOKEN", "")).strip()
+    except Exception:
+        return ""
+
+
+def estado_pagamento(chave: str) -> dict:
+    chave_estado = f"pagamento_pix_{chave}"
+    estado = st.session_state.get(chave_estado)
+    if not isinstance(estado, dict):
+        estado = {}
+        st.session_state[chave_estado] = estado
+    return estado
+
+
+def resetar_pagamento(chave: str) -> None:
+    st.session_state[f"pagamento_pix_{chave}"] = {}
+    st.session_state.pagamento_aprovado = False
+    st.session_state.palpites_liberados = 0
+
+
+def render_gate_pagamento_pix(chave: str, concurso_alvo: int, quantidade_palpites: int, descricao: str) -> bool:
+    quantidade = max(1, int(quantidade_palpites))
+    valor_total = calcular_valor_pagamento(quantidade)
+    estado = estado_pagamento(chave)
+    assinatura = f"{concurso_alvo}:{quantidade}:{valor_total:.2f}:{descricao}"
+    if estado.get("assinatura") and estado.get("assinatura") != assinatura:
+        resetar_pagamento(chave)
+        estado = estado_pagamento(chave)
+
+    st.info(
+        "A Mega-Sena é aleatória. O pagamento libera apenas uma análise estatística, "
+        "sem garantia de acerto, prêmio ou resultado."
+    )
+    st.markdown(
+        f"**Para gerar este palpite, realize o pagamento de R$ {valor_total:,.2f} via PIX.**".replace(".", ",")
+    )
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Palpites", quantidade)
+    col2.metric("Valor por palpite", "R$ 1,00")
+    col3.metric("Valor total", f"R$ {valor_total:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+
+    aprovado = bool(estado.get("aprovado"))
+    if aprovado:
+        st.session_state.pagamento_aprovado = True
+        st.session_state.palpites_liberados = int(estado.get("quantidade_palpites", quantidade))
+        st.success(f"Pagamento aprovado. {st.session_state.palpites_liberados} palpite(s) liberado(s).")
+        return True
+
+    if st.button("Criar cobrança PIX", key=f"criar_pix_{chave}", type="primary"):
+        token = obter_token_mercado_pago()
+        try:
+            if not token:
+                raise ValueError("MERCADO_PAGO_ACCESS_TOKEN não configurado em st.secrets.")
+            resposta = criar_pagamento_pix(
+                token,
+                valor_total,
+                f"{descricao} - {quantidade} palpite(s) - concurso {concurso_alvo}",
+            )
+            dados_pix = extrair_dados_pix(resposta)
+            estado.update(
+                {
+                    **dados_pix,
+                    "assinatura": assinatura,
+                    "concurso_alvo": int(concurso_alvo),
+                    "quantidade_palpites": quantidade,
+                    "valor_total": valor_total,
+                    "aprovado": dados_pix["status"] == "approved",
+                }
+            )
+            registrar_pagamento(concurso_alvo, quantidade, valor_total, dados_pix["status"], dados_pix["payment_id"], 0)
+            st.rerun()
+        except Exception as erro:
+            registrar_pagamento(concurso_alvo, quantidade, valor_total, "erro_criacao", "", 0)
+            st.error(f"Falha ao criar cobrança PIX: {erro}")
+
+    if estado.get("qr_code_base64"):
+        st.image(base64.b64decode(estado["qr_code_base64"]), caption="QR Code PIX")
+    if estado.get("qr_code"):
+        st.text_area("Código PIX copia e cola", estado["qr_code"], height=120, key=f"copia_cola_pix_{chave}")
+    if estado.get("payment_id"):
+        st.caption(f"Status: Aguardando pagamento | Payment ID: {estado['payment_id']}")
+        if st.button("Verificar pagamento", key=f"verificar_pix_{chave}"):
+            token = obter_token_mercado_pago()
+            try:
+                resposta = consultar_pagamento_pix(token, estado["payment_id"])
+                dados_pix = extrair_dados_pix(resposta)
+                estado.update(dados_pix)
+                estado["aprovado"] = dados_pix["status"] == "approved"
+                jogos_liberados = quantidade if estado["aprovado"] else 0
+                registrar_pagamento(concurso_alvo, quantidade, valor_total, dados_pix["status"], dados_pix["payment_id"], jogos_liberados)
+                st.rerun()
+            except Exception as erro:
+                st.error(f"Falha ao consultar pagamento PIX: {erro}")
+
+    if st.button("Simular pagamento aprovado", key=f"simular_pix_{chave}"):
+        payment_id = estado.get("payment_id") or f"SIMULADO-{datetime.now().strftime('%Y%m%d%H%M%S')}"
+        estado.update(
+            {
+                "assinatura": assinatura,
+                "payment_id": payment_id,
+                "status": "approved",
+                "aprovado": True,
+                "concurso_alvo": int(concurso_alvo),
+                "quantidade_palpites": quantidade,
+                "valor_total": valor_total,
+            }
+        )
+        registrar_pagamento(concurso_alvo, quantidade, valor_total, "approved_simulado", payment_id, quantidade)
+        st.rerun()
+
+    st.session_state.pagamento_aprovado = False
+    st.session_state.palpites_liberados = 0
+    return False
+
+
+def consumir_pagamento_aprovado(chave: str, quantidade_palpites: int) -> bool:
+    estado = estado_pagamento(chave)
+    if not estado.get("aprovado"):
+        return False
+    liberados = int(estado.get("quantidade_palpites", 0))
+    if liberados < int(quantidade_palpites):
+        return False
+    estado["aprovado"] = False
+    estado["consumido_em"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    st.session_state.pagamento_aprovado = False
+    st.session_state.palpites_liberados = 0
+    return True
+
+
 def _parse_dezenas_texto(valor: object) -> list[int]:
     partes = str(valor).replace(",", "-").split("-")
     dezenas = []
@@ -1322,11 +1456,17 @@ def render_dezenas_quentes_frias(df: pd.DataFrame) -> None:
 
 def render_gerador_inteligente(df: pd.DataFrame) -> None:
     ranking = calcular_score_dezenas(df)
+    concurso_alvo = obter_concurso_alvo_previsao(df)
 
     st.warning("Este gerador usa estatística histórica e não garante premiação.")
     st.markdown("### Ranking das 20 dezenas com maior score")
     st.dataframe(ranking.head(20), width="stretch", hide_index=True)
 
+    tipo_geracao = st.selectbox(
+        "Tipo de geração",
+        ["Inteligente estatística"],
+        key="tipo_geracao_cobranca_pix",
+    )
     quantidade = st.number_input(
         "Quantidade de jogos",
         min_value=1,
@@ -1335,7 +1475,17 @@ def render_gerador_inteligente(df: pd.DataFrame) -> None:
         step=1,
     )
 
-    if st.button("Gerar Jogo Inteligente", type="primary"):
+    pagamento_liberado = render_gate_pagamento_pix(
+        "geracao_jogos",
+        concurso_alvo,
+        int(quantidade),
+        f"Geração de Jogos - {tipo_geracao}",
+    )
+
+    if st.button("Gerar Jogo Inteligente", type="primary", disabled=not pagamento_liberado):
+        if not consumir_pagamento_aprovado("geracao_jogos", int(quantidade)):
+            st.warning("Realize um novo pagamento PIX antes de gerar novos palpites.")
+            return
         try:
             with st.spinner("Gerando jogos inteligentes."):
                 jogos = gerar_varios_jogos_inteligentes(df, quantidade=int(quantidade))
@@ -1390,7 +1540,17 @@ def render_previsao_sorteio(df: pd.DataFrame) -> None:
     quantidade = st.number_input("Quantidade de previsões", min_value=1, max_value=20, value=5, step=1, key="previsao_quantidade")
     janela = st.number_input("Janela histórica da previsão", min_value=20, max_value=max(20, len(df)), value=min(500, len(df)), step=20, key="previsao_janela")
 
-    if st.button("Gerar previsão do sorteio", type="primary"):
+    pagamento_liberado = render_gate_pagamento_pix(
+        "previsao_sorteio",
+        concurso_alvo,
+        int(quantidade),
+        "Previsão do Sorteio",
+    )
+
+    if st.button("Gerar previsão do sorteio", type="primary", disabled=not pagamento_liberado):
+        if not consumir_pagamento_aprovado("previsao_sorteio", int(quantidade)):
+            st.warning("Realize um novo pagamento PIX antes de gerar novos palpites.")
+            return
         try:
             with st.spinner("Calculando previsão estatística do próximo sorteio."):
                 historico = df.sort_values("Concurso", ascending=False).head(int(janela))
@@ -1462,11 +1622,37 @@ def render_previsao_concurso_alvo(df: pd.DataFrame) -> None:
     col2.metric("Data provável", data_provavel)
     col3.metric("Prêmio estimado", premio_estimado)
 
-    if st.button("Gerar previsão para concurso alvo", type="primary"):
+    quantidade_palpites = st.number_input(
+        "Quantidade de palpites",
+        min_value=1,
+        max_value=6,
+        value=1,
+        step=1,
+        key="previsao_alvo_quantidade_paga",
+    )
+    pagamento_liberado = render_gate_pagamento_pix(
+        "previsao_concurso_alvo",
+        concurso_alvo,
+        int(quantidade_palpites),
+        "Previsão do Próximo Concurso",
+    )
+
+    if st.button("Gerar previsão para concurso alvo", type="primary", disabled=not pagamento_liberado):
+        if not consumir_pagamento_aprovado("previsao_concurso_alvo", int(quantidade_palpites)):
+            st.warning("Realize um novo pagamento PIX antes de gerar novos palpites.")
+            return
         try:
             with st.spinner(f"Calculando previsão estatística para o concurso alvo {concurso_alvo}."):
                 pacote = gerar_previsao_concurso_alvo(df, concurso_alvo)
-                previsao = pacote["exportacao"]
+                previsao_completa = pacote["exportacao"]
+                previsao = previsao_completa[
+                    previsao_completa["Tipo"].astype(str) != "Cobertura 20 dezenas"
+                ].head(int(quantidade_palpites)).reset_index(drop=True)
+                pacote["exportacao"] = previsao
+                pacote["jogo_principal"] = previsao.head(1).reset_index(drop=True)
+                pacote["jogos_alternativos"] = previsao.iloc[1:].reset_index(drop=True)
+                pacote["jogo_20_dezenas"] = pd.DataFrame()
+                pacote["jogo_20_dezenas_lista"] = []
                 ranking = pacote["top_20_dezenas"]
                 pasta = Path("exports")
                 pasta.mkdir(parents=True, exist_ok=True)
