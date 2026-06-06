@@ -738,9 +738,12 @@ def render_gate_pagamento_pix(chave: str, concurso_alvo: int, quantidade_palpite
 
     aprovado = bool(estado.get("aprovado"))
     if aprovado:
+        estado.pop("qr_code", None)
+        estado.pop("qr_code_base64", None)
         st.session_state.pagamento_aprovado = True
         st.session_state.palpites_liberados = int(estado.get("quantidade_palpites", quantidade))
-        st.success(f"Pagamento aprovado. {st.session_state.palpites_liberados} palpite(s) liberado(s).")
+        st.success("✅ Pagamento aprovado com sucesso.")
+        st.info(f"{st.session_state.palpites_liberados} palpite(s) liberado(s).")
         return True
 
     if st.button("Criar cobrança PIX", key=f"criar_pix_{chave}", type="primary", disabled=not email_valido):
@@ -879,28 +882,14 @@ def render_gate_pagamento_pix(chave: str, concurso_alvo: int, quantidade_palpite
                 dados_pix = extrair_dados_pix(resposta)
                 estado.update(dados_pix)
                 estado["aprovado"] = dados_pix["status"] == "approved"
+                if estado["aprovado"]:
+                    estado.pop("qr_code", None)
+                    estado.pop("qr_code_base64", None)
                 jogos_liberados = quantidade if estado["aprovado"] else 0
                 registrar_pagamento(concurso_alvo, quantidade, valor_total, dados_pix["status"], dados_pix["payment_id"], jogos_liberados)
                 st.rerun()
             except Exception as erro:
                 st.error(f"Falha ao consultar pagamento PIX: {erro}")
-
-    if st.button("Simular pagamento aprovado", key=f"simular_pix_{chave}"):
-        payment_id = estado.get("payment_id") or f"SIMULADO-{datetime.now().strftime('%Y%m%d%H%M%S')}"
-        estado.update(
-            {
-                "assinatura": assinatura,
-                "payment_id": payment_id,
-                "status": "approved",
-                "aprovado": True,
-                "concurso_alvo": int(concurso_alvo),
-                "quantidade_palpites": quantidade,
-                "valor_total": valor_total,
-                "email_cliente": email_cliente if email_valido else "",
-            }
-        )
-        registrar_pagamento(concurso_alvo, quantidade, valor_total, "approved_simulado", payment_id, quantidade)
-        st.rerun()
 
     st.session_state.pagamento_aprovado = False
     st.session_state.palpites_liberados = 0
