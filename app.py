@@ -144,6 +144,14 @@ def atualizar_estado_jogos(dados: pd.DataFrame, score: float | int | None, relat
     st.session_state.relatorio_atual = relatorio
 
 
+def definir_resultado_topo(tipo: str, conteudo: object) -> None:
+    st.session_state["resultado_topo"] = {
+        "tipo": tipo,
+        "conteudo": conteudo,
+        "atualizado_em": datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+    }
+
+
 def aplicar_css_institucional() -> None:
     st.markdown(
         """
@@ -478,6 +486,29 @@ def render_card_dezenas(label: str, dezenas: list[int] | tuple[int, ...] | set[i
     )
 
 
+def render_card_resultado_topo(titulo: str, subtitulo: str = "") -> None:
+    st.markdown(
+        f"""
+        <div style="
+            background: #FFFFFF;
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+            margin-bottom: 24px;
+            border: 1px solid #E5E7EB;
+        ">
+            <div style="font-size: 22px; font-weight: 850; color: #111827; margin-bottom: 4px;">
+                {titulo}
+            </div>
+            <div style="font-size: 14px; color: #64748B; font-weight: 650;">
+                {subtitulo}
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def mostrar_jogo(dezenas: list[int]) -> None:
     st.markdown(dezenas_html(dezenas), unsafe_allow_html=True)
 
@@ -773,6 +804,7 @@ def render_gate_pagamento_pix(chave: str, concurso_alvo: int, quantidade_palpite
                     "aprovado": dados_pix["status"] == "approved",
                 }
             )
+            definir_resultado_topo("pix", {"concurso_alvo": concurso_alvo, "quantidade": quantidade, "status": dados_pix["status"]})
             registrar_pagamento(concurso_alvo, quantidade, valor_total, dados_pix["status"], dados_pix["payment_id"], 0)
             st.rerun()
         except Exception as erro:
@@ -886,6 +918,10 @@ def render_gate_pagamento_pix(chave: str, concurso_alvo: int, quantidade_palpite
                     estado.pop("qr_code", None)
                     estado.pop("qr_code_base64", None)
                 jogos_liberados = quantidade if estado["aprovado"] else 0
+                definir_resultado_topo(
+                    "pix_aprovado" if estado["aprovado"] else "pix",
+                    {"concurso_alvo": concurso_alvo, "quantidade": quantidade, "status": dados_pix["status"]},
+                )
                 registrar_pagamento(concurso_alvo, quantidade, valor_total, dados_pix["status"], dados_pix["payment_id"], jogos_liberados)
                 st.rerun()
             except Exception as erro:
@@ -1606,6 +1642,7 @@ def render_gerador_inteligente(df: pd.DataFrame) -> None:
                 score_medio = float(jogos_df["Score"].mean()) if not jogos_df.empty else 0.0
                 registrar_log_execucao("Gerador Inteligente", _ultimo_concurso(df), score_medio)
                 atualizar_estado_jogos(jogos_df, score_medio, "Jogos inteligentes gerados")
+                definir_resultado_topo("geracao_jogos", jogos_df)
             registrar_mensagem("success", "Geração de Jogos concluída com sucesso.")
             st.success("Jogos gerados com sucesso.")
         except Exception as erro:
@@ -1681,6 +1718,7 @@ def render_previsao_sorteio(df: pd.DataFrame) -> None:
                 score_medio = float(previsao["Score estatístico"].mean()) if not previsao.empty else 0.0
                 registrar_log_execucao("Previsão do Sorteio", concurso_alvo, score_medio)
                 atualizar_estado_jogos(previsao, score_medio, f"Previsão do Sorteio executada para {concurso_alvo}")
+                definir_resultado_topo("previsao", previsao)
             registrar_mensagem("success", "Previsão do Sorteio gerada com sucesso.")
             render_alerta_premium("success", "Previsão do Sorteio gerada com sucesso.")
         except Exception as erro:
@@ -1795,6 +1833,7 @@ def render_previsao_concurso_alvo(df: pd.DataFrame) -> None:
                 score_medio = float(previsao["Score Final"].astype(float).mean()) if not previsao.empty else 0.0
                 registrar_log_execucao("Previsão Concurso Alvo", concurso_alvo, score_medio)
                 atualizar_estado_jogos(previsao, score_medio, f"Previsão gerada para concurso alvo {concurso_alvo}")
+                definir_resultado_topo("previsao", pacote)
             registrar_mensagem("success", f"Previsão do concurso alvo {concurso_alvo} gerada com sucesso.")
             render_alerta_premium("success", f"Previsão do concurso alvo {concurso_alvo} gerada com sucesso.")
         except Exception as erro:
@@ -2907,68 +2946,23 @@ def main() -> None:
         st.stop()
 
     resumo = resumo_base(df)
+    resultado_topo_container = st.container()
     cards_slot = st.container()
     base_slot = st.container()
     premiacao_slot = st.container()
+    conteudo_slot = st.container()
 
     secao = render_secao_ativa()
     mais = dezenas_mais_sorteadas(df, limite=10)
     menos = dezenas_menos_sorteadas(df, limite=10)
 
-    if secao == "Visão Geral":
-        st.dataframe(mais, width="stretch", hide_index=True)
-        st.dataframe(menos, width="stretch", hide_index=True)
-        render_analise_avancada(df)
-    elif secao == "Resultados":
-        st.subheader("Resultados carregados")
-        st.dataframe(df.head(30), width="stretch", hide_index=True)
-        st.dataframe(mais, width="stretch", hide_index=True)
-        st.dataframe(menos, width="stretch", hide_index=True)
-        st.plotly_chart(grafico_frequencia(df), width="stretch")
-        render_dezenas_quentes_frias(df)
-    elif secao == "Motor Elite 9":
-        render_motor_elite_9(df)
-    elif secao == "Banco Mestre":
-        render_banco_mestre_elite_9()
-        st.divider()
-        tamanho_banco = st.selectbox("Tamanho do Banco Mestre PRO", [15, 18, 20, 25, 30, 40], index=4, key="banco_mestre_principal_tamanho")
-        if st.button("Gerar Banco Mestre PRO", type="primary"):
-            try:
-                with st.spinner("Gerando Banco Mestre PRO."):
-                    banco = banco_mestre_inteligente(df, tamanho=int(tamanho_banco))
-                    st.session_state.banco_mestre_pro = banco
-                    score_medio = float(banco["Score Mestre"].mean()) if not banco.empty else 0.0
-                    registrar_log_execucao("Banco Mestre PRO", _ultimo_concurso(df), score_medio)
-                    atualizar_estado_jogos(banco, score_medio, "Banco Mestre PRO carregado/atualizado")
-                registrar_mensagem("success", "Banco Mestre PRO gerado.")
-                st.success("Banco Mestre PRO gerado.")
-            except Exception as erro:
-                st.session_state.banco_mestre_pro = pd.DataFrame()
-                registrar_mensagem("error", f"Falha no Banco Mestre PRO: {erro}")
-                st.error(f"Falha no Banco Mestre PRO: {erro}")
-        banco = st.session_state.get("banco_mestre_pro", pd.DataFrame())
-        if isinstance(banco, pd.DataFrame) and not banco.empty:
-            st.markdown(dezenas_html(banco["Dezena"].astype(int).tolist()), unsafe_allow_html=True)
-            st.dataframe(banco, width="stretch", hide_index=True)
-    elif secao == "Elite X":
-        render_motor_elite_x(df)
-        st.divider()
-        render_elite_x_fechamento(df)
-        st.divider()
-        render_elite_x_pro(df)
-    elif secao == "Bolões":
-        render_boloes(df)
-    elif secao == "Auditorias":
-        render_auditoria_elite_9()
-        st.divider()
-        render_backtest_historico(df)
-    elif secao == "Exportações":
-        render_exportacoes()
-    elif secao == "Geração de Jogos":
-        render_gerador_inteligente(df)
-        render_ranking_melhores_jogos(df)
-    elif secao in {"Previsão do Sorteio", "Previsão do Próximo Concurso"}:
-        render_previsao_concurso_alvo(df)
+    with resultado_topo_container:
+        if secao == "Geração de Jogos":
+            render_card_resultado_topo("Resultado gerado", "Geração de Jogos")
+            render_gerador_inteligente(df)
+        elif secao in {"Previsão do Sorteio", "Previsão do Próximo Concurso"}:
+            render_card_resultado_topo("Pagamento PIX", "Previsão do Próximo Concurso")
+            render_previsao_concurso_alvo(df)
 
     with cards_slot:
         render_cards_dashboard_v2(df)
@@ -2988,6 +2982,59 @@ def main() -> None:
             col3.metric("Último concurso", resumo["ultimo_concurso"])
     with premiacao_slot:
         render_painel_premiacao()
+
+    with conteudo_slot:
+        if secao == "Visão Geral":
+            st.dataframe(mais, width="stretch", hide_index=True)
+            st.dataframe(menos, width="stretch", hide_index=True)
+            render_analise_avancada(df)
+        elif secao == "Resultados":
+            st.subheader("Resultados carregados")
+            st.dataframe(df.head(30), width="stretch", hide_index=True)
+            st.dataframe(mais, width="stretch", hide_index=True)
+            st.dataframe(menos, width="stretch", hide_index=True)
+            st.plotly_chart(grafico_frequencia(df), width="stretch")
+            render_dezenas_quentes_frias(df)
+        elif secao == "Motor Elite 9":
+            render_motor_elite_9(df)
+        elif secao == "Banco Mestre":
+            render_banco_mestre_elite_9()
+            st.divider()
+            tamanho_banco = st.selectbox("Tamanho do Banco Mestre PRO", [15, 18, 20, 25, 30, 40], index=4, key="banco_mestre_principal_tamanho")
+            if st.button("Gerar Banco Mestre PRO", type="primary"):
+                try:
+                    with st.spinner("Gerando Banco Mestre PRO."):
+                        banco = banco_mestre_inteligente(df, tamanho=int(tamanho_banco))
+                        st.session_state.banco_mestre_pro = banco
+                        score_medio = float(banco["Score Mestre"].mean()) if not banco.empty else 0.0
+                        registrar_log_execucao("Banco Mestre PRO", _ultimo_concurso(df), score_medio)
+                        atualizar_estado_jogos(banco, score_medio, "Banco Mestre PRO carregado/atualizado")
+                    registrar_mensagem("success", "Banco Mestre PRO gerado.")
+                    st.success("Banco Mestre PRO gerado.")
+                except Exception as erro:
+                    st.session_state.banco_mestre_pro = pd.DataFrame()
+                    registrar_mensagem("error", f"Falha no Banco Mestre PRO: {erro}")
+                    st.error(f"Falha no Banco Mestre PRO: {erro}")
+            banco = st.session_state.get("banco_mestre_pro", pd.DataFrame())
+            if isinstance(banco, pd.DataFrame) and not banco.empty:
+                st.markdown(dezenas_html(banco["Dezena"].astype(int).tolist()), unsafe_allow_html=True)
+                st.dataframe(banco, width="stretch", hide_index=True)
+        elif secao == "Elite X":
+            render_motor_elite_x(df)
+            st.divider()
+            render_elite_x_fechamento(df)
+            st.divider()
+            render_elite_x_pro(df)
+        elif secao == "Bolões":
+            render_boloes(df)
+        elif secao == "Auditorias":
+            render_auditoria_elite_9()
+            st.divider()
+            render_backtest_historico(df)
+        elif secao == "Exportações":
+            render_exportacoes()
+        elif secao == "Geração de Jogos":
+            render_ranking_melhores_jogos(df)
 
     st.divider()
     st.caption(
