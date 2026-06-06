@@ -609,9 +609,9 @@ def render_menu_visual() -> None:
         st.markdown(
             """
             <div class="ux-previsao-card">
-                <div class="ux-previsao-title">Gere seus números para o próximo sorteio da Mega-Sena</div>
+                <div class="ux-previsao-title">🍀 Gere seus números da sorte para o próximo sorteio da Mega-Sena</div>
                 <div class="ux-previsao-text">
-                    Um fluxo simples: informe seu e-mail, pague R$ 1,00 via PIX e veja os números sugeridos.
+                    Informe seu e-mail, gere o PIX de R$ 1,00 e desbloqueie seus números da sorte para o próximo sorteio.
                 </div>
             </div>
             """,
@@ -625,7 +625,7 @@ def render_menu_visual() -> None:
         st.session_state.aba_ativa = "Previsão do Próximo Concurso"
         st.rerun()
     st.markdown(
-        '<div class="mega-previsao-hint">Ganhe acesso à previsão do próximo prêmio de R$ 32 milhões</div>',
+        '<div class="mega-previsao-hint">🍀 Descubra seus números da sorte para concorrer ao próximo prêmio de R$ 32 milhões</div>',
         unsafe_allow_html=True,
     )
     st.markdown("</div>", unsafe_allow_html=True)
@@ -1082,7 +1082,7 @@ def render_gate_pagamento_pix(
     ).strip()
     email_valido = email_cliente_valido(email_cliente)
     if previsao_leigo:
-        st.caption("Usaremos este e-mail apenas para identificar sua compra e liberar sua previsão.")
+        st.caption("Seu e-mail é utilizado apenas para identificar sua solicitação e liberar seus números da sorte.")
     if not email_cliente:
         st.caption("E-mail obrigatório para gerar a cobrança PIX.")
     if email_cliente and not email_valido:
