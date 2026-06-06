@@ -628,6 +628,103 @@ def gerar_ranking_melhores_jogos(
     return pd.DataFrame(linhas).reindex(columns=colunas_ranking)
 
 
+def gerar_previsao_concurso_alvo(df: pd.DataFrame, concurso_alvo: int) -> dict:
+    """Gera um pacote de previsao focado no proximo concurso futuro."""
+    dados = df.sort_values("Concurso", ascending=True).reset_index(drop=True)
+    if dados.empty:
+        raise ValueError("Base historica vazia.")
+
+    ultimo_concurso = int(dados["Concurso"].max())
+    concurso_alvo = int(concurso_alvo)
+    if concurso_alvo <= 0:
+        concurso_alvo = ultimo_concurso + 1
+
+    score_dezenas = calcular_score_dezenas(dados)
+    top_20 = score_dezenas.head(20).copy().reset_index(drop=True)
+    top_20.insert(0, "Ranking", range(1, len(top_20) + 1))
+
+    ranking = gerar_ranking_melhores_jogos(dados, quantidade_candidatos=900, top=12)
+    if ranking.empty:
+        jogos_base = gerar_varios_jogos_inteligentes(dados, quantidade=6)
+        ranking = pd.DataFrame(
+            [
+                {
+                    "Ranking": indice,
+                    "Jogo": " - ".join(f"{dezena:02d}" for dezena in jogo),
+                    "Score": score_jogo(dados, jogo),
+                    "Score Final": score_jogo(dados, jogo),
+                    "Soma": sum(jogo),
+                    "Pares": sum(dezena % 2 == 0 for dezena in jogo),
+                    "Impares": sum(dezena % 2 != 0 for dezena in jogo),
+                    "Classificacao": "Fallback",
+                }
+                for indice, jogo in enumerate(jogos_base, start=1)
+            ]
+        )
+
+    ranking = ranking.copy().head(6).reset_index(drop=True)
+    ranking.insert(0, "Concurso alvo", concurso_alvo)
+    ranking["Tipo"] = ["Principal"] + [f"Alternativo {indice}" for indice in range(1, len(ranking))]
+    coluna_impares = next((coluna for coluna in ranking.columns if "mpares" in str(coluna)), "Impares")
+    ranking["Justificativa estatistica"] = ranking.apply(
+        lambda linha: (
+            "Jogo selecionado para o concurso alvo "
+            f"{concurso_alvo} combinando frequencia geral, janelas de 20/50/100 concursos, "
+            f"atraso, regularidade, correlacao, soma {int(linha.get('Soma', 0))}, "
+            f"{int(linha.get('Pares', 0))} pares, distribuicao por faixas e repeticao controlada "
+            "do ultimo concurso."
+        ),
+        axis=1,
+    )
+
+    dezenas_top_20 = top_20["Dezena"].astype(int).head(20).sort_values().tolist()
+    jogo_principal = _parse_jogo_formatado(str(ranking.iloc[0]["Jogo"])) if not ranking.empty else []
+    jogos_alternativos = ranking.iloc[1:6].copy().reset_index(drop=True)
+    jogo_20 = " - ".join(f"{dezena:02d}" for dezena in dezenas_top_20)
+    score_20 = round(float(top_20["Score"].astype(float).head(20).mean()), 2) if not top_20.empty else 0.0
+
+    cobertura_20 = pd.DataFrame(
+        [
+            {
+                "Concurso alvo": concurso_alvo,
+                "Tipo": "Cobertura 20 dezenas",
+                "Jogo": jogo_20,
+                "Score": score_20,
+                "Score Final": score_20,
+                "Soma": sum(dezenas_top_20),
+                "Pares": sum(dezena % 2 == 0 for dezena in dezenas_top_20),
+                coluna_impares: sum(dezena % 2 != 0 for dezena in dezenas_top_20),
+                "Justificativa estatistica": (
+                    "Jogo unico de cobertura formado pelas 20 dezenas mais fortes do ranking "
+                    "para ampliar combinacoes a partir do concurso alvo."
+                ),
+            }
+        ]
+    )
+
+    exportacao = pd.concat([ranking, cobertura_20], ignore_index=True)
+    justificativa = (
+        f"Previsao calculada para o concurso alvo {concurso_alvo}, mantendo como base historica "
+        f"os concursos carregados ate {ultimo_concurso}. O ranking pondera frequencia geral, "
+        "frequencias recentes de 20, 50 e 100 concursos, atraso atual, regularidade, correlacao "
+        "entre dezenas, equilibrio par/impar, distribuicao por faixas, soma provavel, repeticao "
+        "controlada do ultimo concurso e penalizacao de padroes improvaveis."
+    )
+
+    return {
+        "concurso_alvo": concurso_alvo,
+        "ultimo_concurso": ultimo_concurso,
+        "top_20_dezenas": top_20,
+        "jogo_principal": ranking.iloc[[0]].reset_index(drop=True) if not ranking.empty else pd.DataFrame(),
+        "jogos_alternativos": jogos_alternativos,
+        "jogo_20_dezenas": cobertura_20,
+        "exportacao": exportacao,
+        "jogo_principal_dezenas": jogo_principal,
+        "jogo_20_dezenas_lista": dezenas_top_20,
+        "justificativa_estatistica": justificativa,
+    }
+
+
 def _parse_jogo_formatado(jogo: str) -> list[int]:
     return [int(dezena.strip()) for dezena in str(jogo).split("-") if dezena.strip()]
 

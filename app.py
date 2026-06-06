@@ -38,6 +38,7 @@ from src.gerador_jogos import (
     calcular_score_dezenas,
     exportar_resultados_backtest,
     gerar_motor_elite_7,
+    gerar_previsao_concurso_alvo,
     gerar_ranking_melhores_jogos,
     gerar_varios_jogos_inteligentes,
     score_jogo,
@@ -77,7 +78,7 @@ SECOES_APP = [
     "Auditorias",
     "Exportações",
     "Geração de Jogos",
-    "Previsão do Sorteio",
+    "Previsão do Próximo Concurso",
 ]
 
 PASTAS_BASE_HISTORICA = ("dados", "exports")
@@ -342,12 +343,65 @@ def corrigir_interface_visual() -> None:
             font-weight: 750 !important;
         }
 
+        .mega-alert {
+            border-radius: 14px !important;
+            padding: 18px 22px !important;
+            margin: 12px 0 16px 0 !important;
+            font-size: 16px !important;
+            line-height: 1.48 !important;
+            box-shadow: 0 10px 26px rgba(15, 23, 42, .10) !important;
+            color: #1F2937 !important;
+        }
+
+        .mega-alert strong,
+        .mega-alert span {
+            color: inherit !important;
+        }
+
+        .mega-alert-warning {
+            background: linear-gradient(135deg, #FFF7D6 0%, #FFE9A8 100%) !important;
+            border-left: 7px solid #F59E0B !important;
+            font-weight: 600 !important;
+        }
+
+        .mega-alert-success {
+            background: linear-gradient(135deg, #DCFCE7 0%, #BBF7D0 100%) !important;
+            border-left: 7px solid #16A34A !important;
+            color: #065F46 !important;
+            font-weight: 700 !important;
+        }
+
+        .mega-alert-icon {
+            display: inline-block;
+            margin-right: 9px;
+            font-size: 18px;
+            line-height: 1;
+            vertical-align: -1px;
+        }
+
         @media (max-width: 900px) {
             .stRadio div[role="radiogroup"] {
                 flex-direction: column !important;
             }
         }
         </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_alerta_premium(tipo: str, texto: str) -> None:
+    if tipo == "success":
+        classe = "mega-alert-success"
+        icone = "✅"
+    else:
+        classe = "mega-alert-warning"
+        icone = "⚠️"
+    st.markdown(
+        f"""
+        <div class="mega-alert {classe}">
+            <span class="mega-alert-icon">{icone}</span>{texto}
+        </div>
         """,
         unsafe_allow_html=True,
     )
@@ -443,6 +497,186 @@ def _pegar_valor(dados: dict, *chaves: str, padrao: object = 0.0) -> object:
 def obter_info_caixa_cached() -> dict:
     info = buscar_info_concurso_atual()
     return info if isinstance(info, dict) else {}
+
+
+def _inteiro_positivo(valor: object) -> int | None:
+    try:
+        numero = int(valor)
+    except (TypeError, ValueError):
+        return None
+    return numero if numero > 0 else None
+
+
+def _formatar_premio_previsao(valor: object) -> str:
+    if isinstance(valor, str):
+        texto = valor.strip()
+        if texto.startswith("R$") or texto in {"N/D", "Consultar CAIXA"}:
+            return texto
+    return _formatar_moeda(valor)
+
+
+def obter_metadados_concurso_alvo_previsao(df: pd.DataFrame) -> dict:
+    ultimo_base = _ultimo_concurso(df)
+    info_caixa = obter_info_caixa_cached() or {}
+    proximo_oficial = _inteiro_positivo(info_caixa.get("proximo_concurso"))
+    proximo_card = _inteiro_positivo(st.session_state.get("proximo_concurso_card"))
+
+    concurso_alvo = proximo_oficial or proximo_card or (ultimo_base + 1)
+    data_provavel = (
+        info_caixa.get("data_proximo_concurso")
+        or st.session_state.get("data_proximo_concurso_card")
+        or "Indisponivel"
+    )
+    premio_estimado = info_caixa.get("premio_estimado")
+    if premio_estimado in (None, ""):
+        premio_estimado = st.session_state.get("premio_estimado_card")
+
+    return {
+        "concurso_alvo": int(concurso_alvo),
+        "ultimo_concurso_base": int(ultimo_base),
+        "data_provavel": data_provavel,
+        "premio_estimado": _formatar_premio_previsao(premio_estimado),
+        "info_caixa": info_caixa,
+        "fonte": "CAIXA" if proximo_oficial else "card" if proximo_card else "fallback_base",
+    }
+
+
+def obter_concurso_alvo_previsao(df: pd.DataFrame) -> int:
+    return int(obter_metadados_concurso_alvo_previsao(df)["concurso_alvo"])
+
+
+def calcular_defasagem_base(df: pd.DataFrame) -> dict:
+    metadados = obter_metadados_concurso_alvo_previsao(df)
+    ultimo_base = int(metadados["ultimo_concurso_base"])
+    proximo_oficial = int(metadados["concurso_alvo"])
+    concursos_faltantes = max(0, proximo_oficial - ultimo_base - 1)
+    return {
+        **metadados,
+        "defasada": proximo_oficial - ultimo_base > 1,
+        "concursos_faltantes": concursos_faltantes,
+    }
+
+
+def limpar_derivados_base() -> None:
+    for chave in (
+        "ranking_melhores_jogos",
+        "elite_x_pro_ranking",
+        "banco_mestre_pro",
+        "banco_mestre_elite9",
+        "auditoria_elite_9",
+        "previsao_concurso_alvo",
+        "previsao_sorteio",
+        "previsao_ranking_dezenas",
+        "motor_elite_x",
+        "top_jogos_sessao",
+    ):
+        if chave in st.session_state:
+            del st.session_state[chave]
+
+
+def reprocessar_derivados_base(df: pd.DataFrame) -> list[str]:
+    resultados = []
+    limpar_derivados_base()
+
+    ranking = gerar_ranking_melhores_jogos(df, quantidade_candidatos=3000, top=100)
+    st.session_state.ranking_melhores_jogos = ranking
+    resultados.append("rankings")
+
+    banco = banco_mestre_inteligente(df, tamanho=30)
+    st.session_state.banco_mestre_pro = banco
+    resultados.append("Banco Mestre")
+
+    st.session_state.auditoria_elite_9 = executar_auditoria_elite9(
+        quantidade_concursos=50,
+        jogos_por_concurso=100,
+        candidatos_elite9=5000,
+        geracoes_elite9=4,
+        populacao_elite9=100,
+        incluir_elite7=True,
+        incluir_elite8=True,
+        log_progresso=False,
+    )
+    resultados.append("auditorias")
+
+    concurso_alvo = obter_concurso_alvo_previsao(df)
+    pacote = gerar_previsao_concurso_alvo(df, concurso_alvo)
+    st.session_state.previsao_concurso_alvo = pacote
+    st.session_state.previsao_sorteio = pacote.get("exportacao", pd.DataFrame())
+    st.session_state.previsao_ranking_dezenas = pacote.get("top_20_dezenas", pd.DataFrame())
+    metadados = obter_metadados_concurso_alvo_previsao(df)
+    exportacao = pacote.get("exportacao", pd.DataFrame())
+    pasta = Path("exports")
+    pasta.mkdir(parents=True, exist_ok=True)
+    nome_exportacao = f"RELATORIO_PREVISAO_CONCURSO_{concurso_alvo}"
+    if isinstance(exportacao, pd.DataFrame) and not exportacao.empty:
+        exportacao.to_csv(pasta / f"{nome_exportacao}.csv", index=False, encoding="utf-8-sig")
+        (pasta / f"{nome_exportacao}.xlsx").write_bytes(dataframe_to_excel_bytes(exportacao, "previsao_alvo"))
+        (pasta / f"{nome_exportacao}.pdf").write_bytes(dataframe_to_pdf_bytes(exportacao, f"PREVISAO CONCURSO {concurso_alvo}"))
+    relatorio = [
+        "# Relatorio - Previsao Concurso Alvo",
+        "",
+        f"Concurso alvo: {concurso_alvo}",
+        f"Ultimo concurso da base: {pacote['ultimo_concurso']}",
+        f"Data provavel: {metadados['data_provavel']}",
+        f"Premio estimado: {metadados['premio_estimado']}",
+        "",
+        "Aviso: Analise estatistica. A Mega-Sena e aleatoria e nenhum metodo garante acerto.",
+        "",
+        "## Justificativa estatistica",
+        pacote["justificativa_estatistica"],
+    ]
+    (pasta / f"{nome_exportacao}.md").write_text("\n".join(relatorio), encoding="utf-8")
+    resultados.append("previsoes")
+
+    return resultados
+
+
+def atualizar_base_oficial_e_reprocessar(reprocessar: bool = True) -> bool:
+    atualizou = atualizar_base_local()
+    if not atualizou:
+        return False
+
+    obter_info_caixa_cached.clear()
+    df_atualizado = carregar_base(CAMINHO_BASE_PADRAO)
+    atualizar_estado_base(df_atualizado, "Base oficial atualizada pela CAIXA")
+
+    if reprocessar:
+        itens = reprocessar_derivados_base(df_atualizado)
+        st.session_state.reprocessamento_pos_base = ", ".join(itens)
+
+    registrar_mensagem("success", "Base oficial atualizada com sucesso.")
+    st.session_state.base_oficial_atualizada = True
+    return True
+
+
+def render_alerta_defasagem_base(df: pd.DataFrame) -> None:
+    defasagem = calcular_defasagem_base(df)
+    if not defasagem["defasada"]:
+        return
+
+    st.warning(
+        "Base histórica desatualizada.\n\n"
+        "Existem concursos oficiais ainda não carregados.\n\n"
+        "Recomenda-se atualizar a base antes de gerar previsões."
+    )
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Último concurso da base", defasagem["ultimo_concurso_base"])
+    col2.metric("Próximo concurso oficial", defasagem["concurso_alvo"])
+    col3.metric("Concursos faltantes", defasagem["concursos_faltantes"])
+
+    if st.button("Atualizar Base Oficial", type="primary", key="atualizar_base_oficial_defasagem"):
+        try:
+            with st.spinner("Atualizando base oficial e reprocessando rankings, auditorias, Banco Mestre e previsões."):
+                atualizou = atualizar_base_oficial_e_reprocessar(reprocessar=True)
+            if atualizou:
+                st.success("Base oficial atualizada e derivados reprocessados.")
+                st.rerun()
+            else:
+                registrar_mensagem("error", "Não foi possível atualizar pela CAIXA neste momento. Usando base local.")
+                st.warning("Não foi possível atualizar pela CAIXA neste momento. Usando base local.")
+        except Exception as erro:
+            registrar_mensagem("error", f"Falha ao atualizar e reprocessar base oficial: {erro}")
+            st.error(f"Falha ao atualizar e reprocessar base oficial: {erro}")
 
 
 def _parse_dezenas_texto(valor: object) -> list[int]:
@@ -827,11 +1061,15 @@ def render_cards_dashboard_v2(df: pd.DataFrame) -> None:
     ultimo = dados.iloc[0]
     dezenas_ultimo = [int(ultimo[coluna]) for coluna in COLUNAS_DEZENAS]
     melhor_motor, melhor_score = _melhor_motor_disponivel()
-    info_caixa = obter_info_caixa_cached() or {}
-    proximo = info_caixa.get("proximo_concurso") or (int(ultimo["Concurso"]) + 1)
-    premio = _formatar_moeda(info_caixa.get("premio_estimado"))
+    metadados_previsao = obter_metadados_concurso_alvo_previsao(df)
+    info_caixa = metadados_previsao.get("info_caixa", {})
+    proximo = metadados_previsao["concurso_alvo"]
+    premio = metadados_previsao["premio_estimado"]
     acumulou = "Sim" if info_caixa.get("acumulou") else "Não" if info_caixa else "N/D"
-    data_proximo = info_caixa.get("data_proximo_concurso") or "Fonte local/indisponivel"
+    data_proximo = metadados_previsao["data_provavel"] or "Fonte local/indisponivel"
+    st.session_state.proximo_concurso_card = int(proximo)
+    st.session_state.data_proximo_concurso_card = data_proximo
+    st.session_state.premio_estimado_card = premio
 
     col1, col2, col3, col4 = st.columns(4)
     with col1:
@@ -872,44 +1110,117 @@ def render_base_historica_status(df: pd.DataFrame) -> None:
 
 
 def render_painel_premiacao() -> None:
-    auditoria = st.session_state.get("auditoria_elite_9")
-    if isinstance(auditoria, dict):
-        resumo_auditoria = auditoria.get("resumo", pd.DataFrame())
-    else:
-        resumo_auditoria = pd.DataFrame()
-    if not isinstance(resumo_auditoria, pd.DataFrame) or resumo_auditoria.empty:
-        resumo_auditoria = _ler_resumo_auditoria("exports/auditoria_elite9_1000_100_resumo.csv")
+    def coluna_existente(df: pd.DataFrame, *nomes: str) -> str | None:
+        mapa = {str(coluna).strip().lower(): coluna for coluna in df.columns}
+        for nome in nomes:
+            coluna = mapa.get(nome.strip().lower())
+            if coluna is not None:
+                return str(coluna)
+        return None
+
+    def valor_numero(linha: pd.Series, *nomes: str, padrao: float = 0.0) -> float:
+        for nome in nomes:
+            if nome in linha.index and pd.notna(linha[nome]):
+                try:
+                    return float(linha[nome])
+                except (TypeError, ValueError):
+                    return padrao
+        return padrao
+
+    def auditoria_valida(df: pd.DataFrame) -> bool:
+        if not isinstance(df, pd.DataFrame) or df.empty:
+            return False
+        return all(
+            coluna_existente(df, *nomes) is not None
+            for nomes in (
+                ("Jogos com 6 acertos", "jogos_com_6_acertos"),
+                ("Jogos com 5 acertos", "jogos_com_5_acertos"),
+                ("Jogos com 4 acertos", "jogos_com_4_acertos"),
+                ("Melhor acerto", "melhor_acerto"),
+            )
+        ) and coluna_existente(
+            df,
+            "Score total premiacao",
+            "Score total premiação",
+            "score_total_premiacao",
+            "Score de premiacao",
+            "Score de premiação",
+        ) is not None
+
+    def carregar_resumo_premiacao() -> pd.DataFrame:
+        for caminho in ("exports/relatorio_premiacao.csv", "exports/auditoria.csv"):
+            dados = _ler_resumo_auditoria(caminho)
+            if auditoria_valida(dados):
+                return dados
+
+        historico = _ler_resumo_auditoria("exports/historico_backtest.csv")
+        if not isinstance(historico, pd.DataFrame) or historico.empty or "Motor" not in historico.columns:
+            return pd.DataFrame()
+
+        linhas = []
+        for motor, grupo in historico.groupby("Motor", sort=False):
+            total_jogos = int(grupo["Jogos"].astype(float).sum()) if "Jogos" in grupo.columns else int(len(grupo))
+            melhor_idx = grupo["Melhor acerto"].astype(float).idxmax() if "Melhor acerto" in grupo.columns else grupo.index[0]
+            linha = {
+                "Motor": motor,
+                "Concursos analisados": int(grupo["Concurso"].nunique()) if "Concurso" in grupo.columns else int(len(grupo)),
+                "Total de jogos": total_jogos,
+                "Melhor acerto": int(float(grupo.loc[melhor_idx, "Melhor acerto"])) if "Melhor acerto" in grupo.columns else 0,
+                "Melhor jogo": grupo.loc[melhor_idx, "Melhor jogo"] if "Melhor jogo" in grupo.columns else "",
+                "Concurso do melhor jogo": int(float(grupo.loc[melhor_idx, "Concurso"])) if "Concurso" in grupo.columns else 0,
+                "Score total premiacao": float(grupo["Score total premiacao"].astype(float).sum()) if "Score total premiacao" in grupo.columns else 0.0,
+            }
+            for acertos in (4, 5, 6):
+                coluna = f"Jogos com {acertos} acertos"
+                linha[coluna] = int(grupo[coluna].astype(float).sum()) if coluna in grupo.columns else 0
+            linhas.append(linha)
+        return pd.DataFrame(linhas)
+
+    resumo_auditoria = carregar_resumo_premiacao()
 
     if resumo_auditoria.empty:
-        backtest = st.session_state.get("backtest_elite_x_pro")
-        melhor = backtest.get("melhor", {}) if isinstance(backtest, dict) else {}
-        if melhor:
-            valores = {
-                "6 acertos": str(melhor.get("Sena", melhor.get("6 acertos", "N/D"))),
-                "5 acertos": str(melhor.get("Quina", melhor.get("5 acertos", "N/D"))),
-                "4 acertos": str(melhor.get("Quadra", melhor.get("4 acertos", "N/D"))),
-                "Score de premiação": str(melhor.get("Score", melhor.get("Score_medio", "N/D"))),
-                "Melhor pico": str(melhor.get("Motor", "Elite X PRO")),
-            }
-        else:
-            valores = {
-                "6 acertos": "Sem auditoria",
-                "5 acertos": "Sem auditoria",
-                "4 acertos": "Sem auditoria",
-                "Score de premiação": "Sem auditoria",
-                "Melhor pico": "Sem auditoria",
-            }
+        valores = {
+            "6 acertos": "Sem auditoria",
+            "5 acertos": "Sem auditoria",
+            "4 acertos": "Sem auditoria",
+            "Score de premiação": "Sem auditoria",
+            "Melhor pico": "Sem auditoria",
+        }
     else:
-        if "Score total premiação" in resumo_auditoria.columns:
-            melhor = resumo_auditoria.loc[resumo_auditoria["Score total premiação"].astype(float).idxmax()]
+        coluna_score = coluna_existente(
+            resumo_auditoria,
+            "Score total premiacao",
+            "Score total premiação",
+            "score_total_premiacao",
+            "Score de premiacao",
+            "Score de premiação",
+        )
+        if coluna_score is not None:
+            melhor = resumo_auditoria.loc[resumo_auditoria[coluna_score].astype(float).idxmax()]
         else:
             melhor = resumo_auditoria.iloc[0]
+
+        score_premiacao = valor_numero(
+            melhor,
+            "Score total premiacao",
+            "Score total premiação",
+            "score_total_premiacao",
+            "Score de premiacao",
+            "Score de premiação",
+            padrao=0,
+        )
+        melhor_acerto = int(valor_numero(melhor, "Melhor acerto", "melhor_acerto", padrao=0))
+        concurso_melhor = int(valor_numero(melhor, "Concurso do melhor jogo", "concurso_do_melhor_jogo", padrao=0))
+        melhor_pico = f"{melhor_acerto} acertos"
+        if concurso_melhor:
+            melhor_pico = f"{melhor_pico} - concurso {concurso_melhor}"
+
         valores = {
-            "6 acertos": str(int(float(melhor.get("Jogos com 6 acertos", 0)))),
-            "5 acertos": str(int(float(melhor.get("Jogos com 5 acertos", 0)))),
-            "4 acertos": str(int(float(melhor.get("Jogos com 4 acertos", 0)))),
-            "Score de premiação": f"{float(melhor.get('Score total premiação', 0)):,.0f}".replace(",", "."),
-            "Melhor pico": f"{int(float(melhor.get('Melhor acerto', 0)))} acertos",
+            "6 acertos": str(int(valor_numero(melhor, "Jogos com 6 acertos", "jogos_com_6_acertos", padrao=0))),
+            "5 acertos": str(int(valor_numero(melhor, "Jogos com 5 acertos", "jogos_com_5_acertos", padrao=0))),
+            "4 acertos": str(int(valor_numero(melhor, "Jogos com 4 acertos", "jogos_com_4_acertos", padrao=0))),
+            "Score de premiação": f"{float(score_premiacao):,.0f}".replace(",", "."),
+            "Melhor pico": melhor_pico,
         }
     itens = "".join(
         f"""
@@ -1063,7 +1374,19 @@ def render_gerador_inteligente(df: pd.DataFrame) -> None:
 
 
 def render_previsao_sorteio(df: pd.DataFrame) -> None:
-    st.warning("Previsão estatística baseada em frequência, atraso e score histórico. Não garante premiação.")
+    metadados_previsao = obter_metadados_concurso_alvo_previsao(df)
+    concurso_alvo = metadados_previsao["concurso_alvo"]
+    ultimo_base = metadados_previsao["ultimo_concurso_base"]
+    data_provavel = metadados_previsao["data_provavel"]
+    premio_estimado = metadados_previsao["premio_estimado"]
+    nome_exportacao = f"RELATORIO_PREVISAO_CONCURSO_{concurso_alvo}"
+
+    render_alerta_premium(
+        "warning",
+        "Previsão estatística baseada em frequência, atraso e score histórico. Não garante premiação.",
+    )
+    st.markdown(f"## PREVISÃO DO SORTEIO - CONCURSO {concurso_alvo}")
+    st.info(f"Gerando previsão para o concurso alvo: {concurso_alvo}")
     quantidade = st.number_input("Quantidade de previsões", min_value=1, max_value=20, value=5, step=1, key="previsao_quantidade")
     janela = st.number_input("Janela histórica da previsão", min_value=20, max_value=max(20, len(df)), value=min(500, len(df)), step=20, key="previsao_janela")
 
@@ -1083,18 +1406,26 @@ def render_previsao_sorteio(df: pd.DataFrame) -> None:
                             "Soma": sum(jogo),
                             "Pares": sum(dezena % 2 == 0 for dezena in jogo),
                             "Janela concursos": int(janela),
-                            "Concurso base": _ultimo_concurso(df),
+                            "Ultimo concurso da base": ultimo_base,
+                            "Concurso alvo": concurso_alvo,
+                            "Data provavel": data_provavel,
+                            "Premio estimado": premio_estimado,
                         }
                     )
                 previsao = pd.DataFrame(linhas)
+                pasta = Path("exports")
+                pasta.mkdir(parents=True, exist_ok=True)
+                previsao.to_csv(pasta / f"{nome_exportacao}.csv", index=False, encoding="utf-8-sig")
+                (pasta / f"{nome_exportacao}.xlsx").write_bytes(dataframe_to_excel_bytes(previsao, "previsao"))
+                (pasta / f"{nome_exportacao}.pdf").write_bytes(dataframe_to_pdf_bytes(previsao, f"PREVISAO CONCURSO {concurso_alvo}"))
                 st.session_state.previsao_sorteio = previsao
                 st.session_state.previsao_ranking_dezenas = ranking
                 registrar_jogos_sessao(previsao.rename(columns={"Score estatístico": "Score"}), "Previsão do Sorteio")
                 score_medio = float(previsao["Score estatístico"].mean()) if not previsao.empty else 0.0
-                registrar_log_execucao("Previsão do Sorteio", _ultimo_concurso(df), score_medio)
-                atualizar_estado_jogos(previsao, score_medio, "Previsão do Sorteio executada")
+                registrar_log_execucao("Previsão do Sorteio", concurso_alvo, score_medio)
+                atualizar_estado_jogos(previsao, score_medio, f"Previsão do Sorteio executada para {concurso_alvo}")
             registrar_mensagem("success", "Previsão do Sorteio gerada com sucesso.")
-            st.success("Previsão do Sorteio gerada com sucesso.")
+            render_alerta_premium("success", "Previsão do Sorteio gerada com sucesso.")
         except Exception as erro:
             st.session_state.previsao_sorteio = pd.DataFrame()
             registrar_mensagem("error", f"Falha ao gerar previsão do sorteio: {erro}")
@@ -1105,12 +1436,136 @@ def render_previsao_sorteio(df: pd.DataFrame) -> None:
     if isinstance(previsao, pd.DataFrame) and not previsao.empty:
         st.markdown("### Previsões geradas")
         st.dataframe(previsao, width="stretch", hide_index=True)
-        st.download_button("Exportar previsão CSV", previsao.to_csv(index=False).encode("utf-8-sig"), "previsao_sorteio.csv", "text/csv")
-        st.download_button("Exportar previsão Excel", dataframe_to_excel_bytes(previsao, "previsao"), "previsao_sorteio.xlsx")
-        st.download_button("Exportar previsão PDF", dataframe_to_pdf_bytes(previsao, "PREVISÃO DO SORTEIO"), "previsao_sorteio.pdf", "application/pdf")
+        st.download_button("Exportar previsão CSV", previsao.to_csv(index=False).encode("utf-8-sig"), f"{nome_exportacao}.csv", "text/csv")
+        st.download_button("Exportar previsão Excel", dataframe_to_excel_bytes(previsao, "previsao"), f"{nome_exportacao}.xlsx")
+        st.download_button("Exportar previsão PDF", dataframe_to_pdf_bytes(previsao, f"PREVISAO CONCURSO {concurso_alvo}"), f"{nome_exportacao}.pdf", "application/pdf")
     if isinstance(ranking, pd.DataFrame) and not ranking.empty:
         st.markdown("### Ranking de dezenas da previsão")
         st.dataframe(ranking.head(30), width="stretch", hide_index=True)
+
+
+def render_previsao_concurso_alvo(df: pd.DataFrame) -> None:
+    metadados_previsao = obter_metadados_concurso_alvo_previsao(df)
+    concurso_alvo = metadados_previsao["concurso_alvo"]
+    ultimo_base = metadados_previsao["ultimo_concurso_base"]
+    st.session_state.concurso_alvo = concurso_alvo
+    data_provavel = metadados_previsao["data_provavel"]
+    premio_estimado = metadados_previsao["premio_estimado"]
+    nome_exportacao = f"RELATORIO_PREVISAO_CONCURSO_{concurso_alvo}"
+
+    render_alerta_premium("warning", "Análise estatística. A Mega-Sena é aleatória e nenhum método garante acerto.")
+    st.markdown(f"## PREVISÃO DO SORTEIO - CONCURSO {concurso_alvo}")
+    st.info(f"Gerando previsão para o concurso alvo: {concurso_alvo}")
+
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Concurso alvo", concurso_alvo)
+    col2.metric("Data provável", data_provavel)
+    col3.metric("Prêmio estimado", premio_estimado)
+
+    if st.button("Gerar previsão para concurso alvo", type="primary"):
+        try:
+            with st.spinner(f"Calculando previsão estatística para o concurso alvo {concurso_alvo}."):
+                pacote = gerar_previsao_concurso_alvo(df, concurso_alvo)
+                previsao = pacote["exportacao"]
+                ranking = pacote["top_20_dezenas"]
+                pasta = Path("exports")
+                pasta.mkdir(parents=True, exist_ok=True)
+                caminho_csv = pasta / f"{nome_exportacao}.csv"
+                caminho_xlsx = pasta / f"{nome_exportacao}.xlsx"
+                caminho_pdf = pasta / f"{nome_exportacao}.pdf"
+                caminho_md = pasta / f"{nome_exportacao}.md"
+                previsao.to_csv(caminho_csv, index=False, encoding="utf-8-sig")
+                caminho_xlsx.write_bytes(dataframe_to_excel_bytes(previsao, "previsao_alvo"))
+                caminho_pdf.write_bytes(dataframe_to_pdf_bytes(previsao, f"PREVISAO CONCURSO {concurso_alvo}"))
+
+                relatorio = [
+                    "# Relatorio - Previsao Concurso Alvo",
+                    "",
+                    f"Concurso alvo: {concurso_alvo}",
+                    f"Ultimo concurso da base: {ultimo_base}",
+                    f"Data provavel: {data_provavel}",
+                    f"Premio estimado: {premio_estimado}",
+                    "",
+                    "Aviso: Analise estatistica. A Mega-Sena e aleatoria e nenhum metodo garante acerto.",
+                    "",
+                    "## Jogo principal",
+                    pacote["jogo_principal"].to_string(index=False) if not pacote["jogo_principal"].empty else "N/D",
+                    "",
+                    "## Jogos alternativos",
+                    pacote["jogos_alternativos"].to_string(index=False) if not pacote["jogos_alternativos"].empty else "N/D",
+                    "",
+                    "## Top 20 dezenas",
+                    ranking.head(20).to_string(index=False),
+                    "",
+                    "## Jogo unico de 20 dezenas",
+                    pacote["jogo_20_dezenas"].to_string(index=False),
+                    "",
+                    "## Justificativa estatistica",
+                    pacote["justificativa_estatistica"],
+                ]
+                caminho_md.write_text("\n".join(relatorio), encoding="utf-8")
+
+                st.session_state.previsao_concurso_alvo = pacote
+                st.session_state.previsao_sorteio = previsao
+                st.session_state.previsao_ranking_dezenas = ranking
+                registrar_jogos_sessao(previsao.rename(columns={"Score Final": "Score"}), "Previsão Concurso Alvo")
+                score_medio = float(previsao["Score Final"].astype(float).mean()) if not previsao.empty else 0.0
+                registrar_log_execucao("Previsão Concurso Alvo", concurso_alvo, score_medio)
+                atualizar_estado_jogos(previsao, score_medio, f"Previsão gerada para concurso alvo {concurso_alvo}")
+            registrar_mensagem("success", f"Previsão do concurso alvo {concurso_alvo} gerada com sucesso.")
+            render_alerta_premium("success", f"Previsão do concurso alvo {concurso_alvo} gerada com sucesso.")
+        except Exception as erro:
+            st.session_state.previsao_concurso_alvo = {}
+            st.session_state.previsao_sorteio = pd.DataFrame()
+            registrar_mensagem("error", f"Falha ao gerar previsão do concurso alvo: {erro}")
+            st.error(f"Falha ao gerar previsão do concurso alvo: {erro}")
+
+    pacote = st.session_state.get("previsao_concurso_alvo", {})
+    if not isinstance(pacote, dict) or not pacote:
+        return
+
+    jogo_principal = pacote.get("jogo_principal", pd.DataFrame())
+    jogos_alternativos = pacote.get("jogos_alternativos", pd.DataFrame())
+    top_20 = pacote.get("top_20_dezenas", pd.DataFrame())
+    jogo_20 = pacote.get("jogo_20_dezenas", pd.DataFrame())
+    exportacao = pacote.get("exportacao", pd.DataFrame())
+
+    if isinstance(jogo_principal, pd.DataFrame) and not jogo_principal.empty:
+        st.markdown("### Jogo principal recomendado")
+        mostrar_jogo(_parse_dezenas_texto(jogo_principal.iloc[0]["Jogo"]))
+        st.dataframe(jogo_principal, width="stretch", hide_index=True)
+
+    if isinstance(jogos_alternativos, pd.DataFrame) and not jogos_alternativos.empty:
+        st.markdown("### Jogos alternativos")
+        st.dataframe(jogos_alternativos, width="stretch", hide_index=True)
+
+    if isinstance(top_20, pd.DataFrame) and not top_20.empty:
+        st.markdown("### Top 20 dezenas")
+        st.dataframe(top_20.head(20), width="stretch", hide_index=True)
+
+    if isinstance(jogo_20, pd.DataFrame) and not jogo_20.empty:
+        st.markdown("### Jogo de cobertura com 20 dezenas")
+        mostrar_jogo(pacote.get("jogo_20_dezenas_lista", []))
+        st.dataframe(jogo_20, width="stretch", hide_index=True)
+
+    if isinstance(exportacao, pd.DataFrame) and not exportacao.empty:
+        st.download_button(
+            "Exportar previsão concurso alvo CSV",
+            exportacao.to_csv(index=False).encode("utf-8-sig"),
+            f"{nome_exportacao}.csv",
+            "text/csv",
+        )
+        st.download_button(
+            "Exportar previsão concurso alvo Excel",
+            dataframe_to_excel_bytes(exportacao, "previsao_alvo"),
+            f"{nome_exportacao}.xlsx",
+        )
+        st.download_button(
+            "Exportar previsão concurso alvo PDF",
+            dataframe_to_pdf_bytes(exportacao, f"PREVISAO CONCURSO {concurso_alvo}"),
+            f"{nome_exportacao}.pdf",
+            "application/pdf",
+        )
 
 
 def render_backtest_historico(df: pd.DataFrame) -> None:
@@ -1643,6 +2098,10 @@ def _ultimo_concurso(df: pd.DataFrame) -> int:
     return int(df["Concurso"].astype(int).max()) if df is not None and not df.empty else 0
 
 
+def _concurso_alvo(df: pd.DataFrame) -> int:
+    return obter_concurso_alvo_previsao(df)
+
+
 def render_top_1000_sessao() -> None:
     ranking = st.session_state.get("top_jogos_sessao", pd.DataFrame())
     st.markdown("### TOP 1000 JOGOS DA SESSAO")
@@ -2143,17 +2602,15 @@ def main() -> None:
 
     if st.session_state.pop("base_oficial_atualizada", False):
         st.success("Base oficial atualizada com sucesso.")
+        reprocessados = st.session_state.pop("reprocessamento_pos_base", "")
+        if reprocessados:
+            st.info(f"Reprocessamento concluído: {reprocessados}.")
 
-    if st.button("Atualizar base oficial"):
+    if st.button("Atualizar base oficial", key="atualizar_base_oficial_topo"):
         try:
-            with st.spinner("Atualizando base oficial pela CAIXA."):
-                atualizou = atualizar_base_local()
+            with st.spinner("Atualizando base oficial pela CAIXA e reprocessando derivados."):
+                atualizou = atualizar_base_oficial_e_reprocessar(reprocessar=True)
             if atualizou:
-                obter_info_caixa_cached.clear()
-                df_atualizado = carregar_base(CAMINHO_BASE_PADRAO)
-                atualizar_estado_base(df_atualizado, "Base oficial atualizada pela CAIXA")
-                registrar_mensagem("success", "Base oficial atualizada com sucesso.")
-                st.session_state.base_oficial_atualizada = True
                 st.rerun()
             else:
                 registrar_mensagem("error", "Não foi possível atualizar pela CAIXA neste momento. Usando base local.")
@@ -2227,11 +2684,12 @@ def main() -> None:
     elif secao == "Geração de Jogos":
         render_gerador_inteligente(df)
         render_ranking_melhores_jogos(df)
-    elif secao == "Previsão do Sorteio":
-        render_previsao_sorteio(df)
+    elif secao in {"Previsão do Sorteio", "Previsão do Próximo Concurso"}:
+        render_previsao_concurso_alvo(df)
 
     with cards_slot:
         render_cards_dashboard_v2(df)
+        render_alerta_defasagem_base(df)
     with base_slot:
         render_base_historica_status(df)
         with st.expander("Base histórica e fonte oficial", expanded=False):
@@ -2257,3 +2715,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

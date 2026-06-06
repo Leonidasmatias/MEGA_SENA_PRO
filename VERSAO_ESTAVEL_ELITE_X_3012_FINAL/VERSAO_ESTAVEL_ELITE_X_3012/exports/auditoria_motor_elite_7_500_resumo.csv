@@ -1,0 +1,3 @@
+﻿Motor,Concursos analisados,Total de jogos,Total de acertos,Media de acertos por jogo,Melhor acerto,Melhor jogo,Concurso do melhor jogo,Jogos com 2 acertos,Taxa 2 acertos (%),Jogos com 3 acertos,Taxa 3 acertos (%),Jogos com 4 acertos,Taxa 4 acertos (%),Jogos com 5 acertos,Taxa 5 acertos (%),Jogos com 6 acertos,Taxa 6 acertos (%),Conclusao automatica
+Motor Elite 7,500,50000,29607,0.59214,4,02 - 30 - 31 - 42 - 47 - 52,2492,4617,9.234,497,0.994,21,0.042,0,0.0,0,0.0,NAO superou o gerador aleatorio em media de acertos por jogo.
+Aleatorio,500,50000,29917,0.59834,4,09 - 10 - 15 - 20 - 35 - 40,2479,4751,9.502,467,0.934,19,0.038,0,0.0,0,0.0,
