@@ -87,6 +87,14 @@ SECOES_APP = [
 
 PASTAS_BASE_HISTORICA = ("dados", "exports")
 EXTENSOES_BASE_HISTORICA = {".csv", ".xlsx", ".xls"}
+MODO_ADMIN = False
+
+
+def modo_admin_ativo() -> bool:
+    try:
+        return bool(st.secrets.get("MODO_ADMIN", MODO_ADMIN))
+    except Exception:
+        return MODO_ADMIN
 
 
 def inicializar_estado() -> None:
@@ -583,17 +591,32 @@ def render_topo_institucional() -> None:
 
 
 def render_menu_visual() -> None:
+    admin = modo_admin_ativo()
     st.markdown('<div class="mega-menu-toolbar">', unsafe_allow_html=True)
-    secoes_normais = [secao for secao in SECOES_APP if secao != "Previsão do Próximo Concurso"]
-    for inicio in range(0, len(secoes_normais), 5):
-        linha = secoes_normais[inicio : inicio + 5]
-        colunas = st.columns(len(linha))
-        for coluna, secao in zip(colunas, linha):
-            ativo = secao == st.session_state.get("aba_ativa", SECOES_APP[0])
-            label = f"• {secao}" if ativo else secao
-            if coluna.button(label, key=f"menu_secao_{secao}", use_container_width=True):
-                st.session_state.aba_ativa = secao
-                st.rerun()
+    if admin:
+        secoes_normais = [secao for secao in SECOES_APP if secao != "Previsão do Próximo Concurso"]
+        for inicio in range(0, len(secoes_normais), 5):
+            linha = secoes_normais[inicio : inicio + 5]
+            colunas = st.columns(len(linha))
+            for coluna, secao in zip(colunas, linha):
+                ativo = secao == st.session_state.get("aba_ativa", SECOES_APP[0])
+                label = f"• {secao}" if ativo else secao
+                if coluna.button(label, key=f"menu_secao_{secao}", use_container_width=True):
+                    st.session_state.aba_ativa = secao
+                    st.rerun()
+    else:
+        st.session_state.aba_ativa = "Previsão do Próximo Concurso"
+        st.markdown(
+            """
+            <div class="ux-previsao-card">
+                <div class="ux-previsao-title">Gere seus números para o próximo sorteio da Mega-Sena</div>
+                <div class="ux-previsao-text">
+                    Um fluxo simples: informe seu e-mail, pague R$ 1,00 via PIX e veja os números sugeridos.
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
     st.markdown('<div class="mega-previsao-menu">', unsafe_allow_html=True)
     st.markdown('<div style="text-align:center;"><span class="mega-previsao-badge">🔥 MAIS ACESSADO</span></div>', unsafe_allow_html=True)
     ativo_previsao = st.session_state.get("aba_ativa") == "Previsão do Próximo Concurso"
@@ -610,6 +633,9 @@ def render_menu_visual() -> None:
 
 
 def render_secao_ativa() -> str:
+    if not modo_admin_ativo():
+        st.session_state.aba_ativa = "Previsão do Próximo Concurso"
+        return "Previsão do Próximo Concurso"
     secao = st.session_state.get("aba_ativa", SECOES_APP[0])
     if secao not in SECOES_APP:
         secao = SECOES_APP[0]
@@ -3342,6 +3368,7 @@ def main() -> None:
     inicializar_estado()
     aplicar_css_institucional()
     corrigir_interface_visual()
+    admin = modo_admin_ativo()
     render_topo_institucional()
     render_menu_visual()
     render_mensagens_estado()
@@ -3352,7 +3379,7 @@ def main() -> None:
         if reprocessados:
             st.info(f"Reprocessamento concluído: {reprocessados}.")
 
-    if st.button("Atualizar base oficial", key="atualizar_base_oficial_topo"):
+    if admin and st.button("Atualizar base oficial", key="atualizar_base_oficial_topo"):
         try:
             with st.spinner("Atualizando base oficial pela CAIXA e reprocessando derivados."):
                 atualizou = atualizar_base_oficial_e_reprocessar(reprocessar=True)
@@ -3389,7 +3416,7 @@ def main() -> None:
         secao_render = secao
         if secao in pagamentos_funcoes:
             chave_funcao, nome_funcao = pagamentos_funcoes[secao]
-            if chave_funcao == "previsao":
+            if chave_funcao == "previsao" and admin:
                 render_card_ux_previsao_leigo(df)
             if not exigir_pagamento_para_funcao(
                 chave_funcao,
@@ -3455,31 +3482,33 @@ def main() -> None:
             render_ranking_melhores_jogos(df)
         elif secao_render in {"Previsão do Sorteio", "Previsão do Próximo Concurso"}:
             render_previsao_concurso_alvo(df)
-    render_upload_csv_base_topo()
+    if admin:
+        render_upload_csv_base_topo()
 
     resumo = resumo_base(df)
     cards_slot = st.container()
     base_slot = st.container()
     premiacao_slot = st.container()
 
-    with cards_slot:
-        render_cards_dashboard_v2(df)
-        render_alerta_defasagem_base(df)
-    with base_slot:
-        render_base_historica_status(df)
-        with st.expander("Base histórica e fonte oficial", expanded=False):
-            st.info(
-                "Base histórica: dados obtidos da página oficial da CAIXA. "
-                "Consulte a fonte oficial para validação."
-            )
-            st.link_button("Conferir resultados oficiais na CAIXA", FONTE_CAIXA_URL)
-            st.caption("Este sistema utiliza estatística histórica e não possui vínculo oficial com a CAIXA.")
-            col1, col2, col3 = st.columns(3)
-            col1.metric("Concursos carregados", resumo["total_concursos"])
-            col2.metric("Primeiro concurso", resumo["primeiro_concurso"])
-            col3.metric("Último concurso", resumo["ultimo_concurso"])
-    with premiacao_slot:
-        render_painel_premiacao()
+    if admin:
+        with cards_slot:
+            render_cards_dashboard_v2(df)
+            render_alerta_defasagem_base(df)
+        with base_slot:
+            render_base_historica_status(df)
+            with st.expander("Base histórica e fonte oficial", expanded=False):
+                st.info(
+                    "Base histórica: dados obtidos da página oficial da CAIXA. "
+                    "Consulte a fonte oficial para validação."
+                )
+                st.link_button("Conferir resultados oficiais na CAIXA", FONTE_CAIXA_URL)
+                st.caption("Este sistema utiliza estatística histórica e não possui vínculo oficial com a CAIXA.")
+                col1, col2, col3 = st.columns(3)
+                col1.metric("Concursos carregados", resumo["total_concursos"])
+                col2.metric("Primeiro concurso", resumo["primeiro_concurso"])
+                col3.metric("Último concurso", resumo["ultimo_concurso"])
+        with premiacao_slot:
+            render_painel_premiacao()
 
     st.divider()
     st.caption("Este projeto não possui vínculo com a Caixa Econômica Federal. Use com responsabilidade.")
