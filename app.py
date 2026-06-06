@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from datetime import datetime
 from io import BytesIO
@@ -3007,46 +3007,10 @@ def main() -> None:
         st.stop()
 
     secao = render_secao_ativa()
-    area_resultado_topo = st.container()
-    with area_resultado_topo:
-        if secao == "Geração de Jogos":
-            render_card_resultado_topo("Resultado gerado", "Geração de Jogos")
-            render_gerador_inteligente(df)
-        elif secao in {"Previsão do Sorteio", "Previsão do Próximo Concurso"}:
-            render_card_resultado_topo("Pagamento PIX", "Previsão do Próximo Concurso")
-            render_previsao_concurso_alvo(df)
-
-    render_upload_csv_base_topo()
-
-    resumo = resumo_base(df)
-    cards_slot = st.container()
-    base_slot = st.container()
-    premiacao_slot = st.container()
-    conteudo_slot = st.container()
-
     mais = dezenas_mais_sorteadas(df, limite=10)
     menos = dezenas_menos_sorteadas(df, limite=10)
-
-    with cards_slot:
-        render_cards_dashboard_v2(df)
-        render_alerta_defasagem_base(df)
-    with base_slot:
-        render_base_historica_status(df)
-        with st.expander("Base histórica e fonte oficial", expanded=False):
-            st.info(
-                "Base histórica: dados obtidos da página oficial da CAIXA. "
-                "Consulte a fonte oficial para validação."
-            )
-            st.link_button("Conferir resultados oficiais na CAIXA", FONTE_CAIXA_URL)
-            st.caption("Este sistema utiliza estatística histórica e não possui vínculo oficial com a CAIXA.")
-            col1, col2, col3 = st.columns(3)
-            col1.metric("Concursos carregados", resumo["total_concursos"])
-            col2.metric("Primeiro concurso", resumo["primeiro_concurso"])
-            col3.metric("Último concurso", resumo["ultimo_concurso"])
-    with premiacao_slot:
-        render_painel_premiacao()
-
-    with conteudo_slot:
+    area_resultado_topo = st.container()
+    with area_resultado_topo:
         if secao == "Visão Geral":
             st.dataframe(mais, width="stretch", hide_index=True)
             st.dataframe(menos, width="stretch", hide_index=True)
@@ -3097,7 +3061,38 @@ def main() -> None:
         elif secao == "Exportações":
             render_exportacoes()
         elif secao == "Geração de Jogos":
+            render_card_resultado_topo("Resultado gerado", "Geração de Jogos")
+            render_gerador_inteligente(df)
+            st.divider()
             render_ranking_melhores_jogos(df)
+        elif secao in {"Previsão do Sorteio", "Previsão do Próximo Concurso"}:
+            render_card_resultado_topo("Pagamento PIX", "Previsão do Próximo Concurso")
+            render_previsao_concurso_alvo(df)
+    render_upload_csv_base_topo()
+
+    resumo = resumo_base(df)
+    cards_slot = st.container()
+    base_slot = st.container()
+    premiacao_slot = st.container()
+
+    with cards_slot:
+        render_cards_dashboard_v2(df)
+        render_alerta_defasagem_base(df)
+    with base_slot:
+        render_base_historica_status(df)
+        with st.expander("Base histórica e fonte oficial", expanded=False):
+            st.info(
+                "Base histórica: dados obtidos da página oficial da CAIXA. "
+                "Consulte a fonte oficial para validação."
+            )
+            st.link_button("Conferir resultados oficiais na CAIXA", FONTE_CAIXA_URL)
+            st.caption("Este sistema utiliza estatística histórica e não possui vínculo oficial com a CAIXA.")
+            col1, col2, col3 = st.columns(3)
+            col1.metric("Concursos carregados", resumo["total_concursos"])
+            col2.metric("Primeiro concurso", resumo["primeiro_concurso"])
+            col3.metric("Último concurso", resumo["ultimo_concurso"])
+    with premiacao_slot:
+        render_painel_premiacao()
 
     st.divider()
     st.caption(
@@ -3108,5 +3103,10 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+
+
+
+
 
 
