@@ -509,6 +509,81 @@ def render_card_resultado_topo(titulo: str, subtitulo: str = "") -> None:
     )
 
 
+def render_assinatura_criador() -> None:
+    st.markdown(
+        """
+        <div style="
+            background:#FFFFFF;
+            border:1px solid #E5E7EB;
+            border-radius:16px;
+            padding:24px;
+            box-shadow:0 8px 24px rgba(15,23,42,0.08);
+            margin-top:24px;
+            color:#1F2937;
+            line-height:1.55;
+        ">
+            <div style="font-size:20px;font-weight:850;color:#003F7D;margin-bottom:10px;">
+                Mega-Sena Pro®
+            </div>
+            <div style="font-size:15px;font-weight:700;">
+                Desenvolvido por Leônidas Aparecido Matias
+            </div>
+            <div style="font-size:14px;margin-top:10px;">
+                Supervisor de Telecomunicações<br>
+                Engenheiro Eletricista
+            </div>
+            <div style="font-size:13px;margin-top:14px;color:#475569;">
+                Versão Oficial: ELITE_X_STABLE_3012<br>
+                Motor Elite 9
+            </div>
+            <div style="font-size:13px;margin-top:14px;">
+                <strong>Contato:</strong><br>
+                📱 WhatsApp: (11) 93729-9687
+            </div>
+            <div style="font-size:13px;margin-top:14px;">
+                <strong>LinkedIn:</strong><br>
+                <a href="https://www.linkedin.com/in/leônidas-matias-8a722466/" target="_blank">
+                    https://www.linkedin.com/in/leônidas-matias-8a722466/
+                </a>
+            </div>
+            <div style="font-size:13px;margin-top:14px;">
+                <strong>GitHub:</strong><br>
+                <a href="https://github.com/Leonidasmatias" target="_blank">
+                    https://github.com/Leonidasmatias
+                </a>
+            </div>
+            <div style="font-size:12px;margin-top:16px;color:#64748B;">
+                Copyright © 2026<br>
+                Todos os direitos reservados.
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    with st.expander("Sobre", expanded=False):
+        st.markdown(
+            """
+            **Criador:**  
+            Leônidas Aparecido Matias
+
+            **Cargo:**  
+            Supervisor de Telecomunicações  
+            Engenheiro Eletricista
+
+            **Projeto:**  
+            Mega-Sena Pro
+
+            **Tecnologias:**  
+            Python  
+            Streamlit  
+            Pandas  
+            Plotly  
+            Mercado Pago PIX
+            """
+        )
+
+
 def mostrar_jogo(dezenas: list[int]) -> None:
     st.markdown(dezenas_html(dezenas), unsafe_allow_html=True)
 
@@ -3158,10 +3233,8 @@ def main() -> None:
         render_painel_premiacao()
 
     st.divider()
-    st.caption(
-        "Este projeto não possui vínculo com a Caixa Econômica Federal. "
-        "Use com responsabilidade."
-    )
+    st.caption("Este projeto não possui vínculo com a Caixa Econômica Federal. Use com responsabilidade.")
+    render_assinatura_criador()
 
 
 if __name__ == "__main__":
