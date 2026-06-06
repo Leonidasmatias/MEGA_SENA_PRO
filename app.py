@@ -732,11 +732,19 @@ def estado_pagamento(chave: str) -> dict:
 
 def resetar_pagamento(chave: str) -> None:
     st.session_state[f"pagamento_pix_{chave}"] = {}
+    st.session_state[f"pagamento_aprovado_{chave}"] = False
     st.session_state.pagamento_aprovado = False
     st.session_state.palpites_liberados = 0
 
 
-def render_gate_pagamento_pix(chave: str, concurso_alvo: int, quantidade_palpites: int, descricao: str) -> bool:
+def render_gate_pagamento_pix(
+    chave: str,
+    concurso_alvo: int,
+    quantidade_palpites: int,
+    descricao: str,
+    funcao: str = "",
+    conteudo_liberado: str = "",
+) -> bool:
     quantidade = max(1, int(quantidade_palpites))
     valor_total = calcular_valor_pagamento(quantidade)
     estado = estado_pagamento(chave)
@@ -749,12 +757,17 @@ def render_gate_pagamento_pix(chave: str, concurso_alvo: int, quantidade_palpite
         "A Mega-Sena é aleatória. O pagamento libera apenas uma análise estatística, "
         "sem garantia de acerto, prêmio ou resultado."
     )
-    st.markdown(
-        f"**Para gerar este palpite, realize o pagamento de R$ {valor_total:,.2f} via PIX.**".replace(".", ",")
-    )
+    if funcao:
+        st.markdown(
+            f"**Para acessar {funcao}, realize o pagamento de R$ {valor_total:,.2f} via PIX.**".replace(".", ",")
+        )
+    else:
+        st.markdown(
+            f"**Para gerar este palpite, realize o pagamento de R$ {valor_total:,.2f} via PIX.**".replace(".", ",")
+        )
     col1, col2, col3 = st.columns(3)
-    col1.metric("Palpites", quantidade)
-    col2.metric("Valor por palpite", "R$ 1,00")
+    col1.metric("Função" if funcao else "Palpites", funcao or quantidade)
+    col2.metric("Valor", "R$ 1,00")
     col3.metric("Valor total", f"R$ {valor_total:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
     email_cliente = st.text_input(
         "Digite seu e-mail para receber a cobrança PIX",
@@ -771,10 +784,14 @@ def render_gate_pagamento_pix(chave: str, concurso_alvo: int, quantidade_palpite
     if aprovado:
         estado.pop("qr_code", None)
         estado.pop("qr_code_base64", None)
+        st.session_state[f"pagamento_aprovado_{chave}"] = True
         st.session_state.pagamento_aprovado = True
         st.session_state.palpites_liberados = int(estado.get("quantidade_palpites", quantidade))
         st.success("✅ Pagamento aprovado com sucesso.")
-        st.info(f"{st.session_state.palpites_liberados} palpite(s) liberado(s).")
+        if funcao:
+            st.info(f"Pagamento aprovado. Acesso liberado para {funcao}.")
+        else:
+            st.info(f"{st.session_state.palpites_liberados} palpite(s) liberado(s).")
         return True
 
     if st.button("Criar cobrança PIX", key=f"criar_pix_{chave}", type="primary", disabled=not email_valido):
@@ -789,7 +806,7 @@ def render_gate_pagamento_pix(chave: str, concurso_alvo: int, quantidade_palpite
             resposta = criar_pagamento_pix(
                 token,
                 valor_total,
-                f"{descricao} - {quantidade} palpite(s) - concurso {concurso_alvo}",
+                f"{descricao} - acesso por funcao - concurso {concurso_alvo}" if funcao else f"{descricao} - {quantidade} palpite(s) - concurso {concurso_alvo}",
                 email_cliente,
             )
             dados_pix = extrair_dados_pix(resposta)
@@ -805,10 +822,30 @@ def render_gate_pagamento_pix(chave: str, concurso_alvo: int, quantidade_palpite
                 }
             )
             definir_resultado_topo("pix", {"concurso_alvo": concurso_alvo, "quantidade": quantidade, "status": dados_pix["status"]})
-            registrar_pagamento(concurso_alvo, quantidade, valor_total, dados_pix["status"], dados_pix["payment_id"], 0)
+            registrar_pagamento(
+                concurso_alvo,
+                quantidade,
+                valor_total,
+                dados_pix["status"],
+                dados_pix["payment_id"],
+                0,
+                funcao=funcao or descricao,
+                email_pagador=email_cliente,
+                conteudo_liberado="",
+            )
             st.rerun()
         except Exception as erro:
-            registrar_pagamento(concurso_alvo, quantidade, valor_total, "erro_criacao", "", 0)
+            registrar_pagamento(
+                concurso_alvo,
+                quantidade,
+                valor_total,
+                "erro_criacao",
+                "",
+                0,
+                funcao=funcao or descricao,
+                email_pagador=email_cliente,
+                conteudo_liberado="",
+            )
             st.error(f"Falha ao criar cobrança PIX: {erro}")
 
     valor_formatado = f"R$ {valor_total:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
@@ -918,11 +955,22 @@ def render_gate_pagamento_pix(chave: str, concurso_alvo: int, quantidade_palpite
                     estado.pop("qr_code", None)
                     estado.pop("qr_code_base64", None)
                 jogos_liberados = quantidade if estado["aprovado"] else 0
+                st.session_state[f"pagamento_aprovado_{chave}"] = bool(estado["aprovado"])
                 definir_resultado_topo(
                     "pix_aprovado" if estado["aprovado"] else "pix",
                     {"concurso_alvo": concurso_alvo, "quantidade": quantidade, "status": dados_pix["status"]},
                 )
-                registrar_pagamento(concurso_alvo, quantidade, valor_total, dados_pix["status"], dados_pix["payment_id"], jogos_liberados)
+                registrar_pagamento(
+                    concurso_alvo,
+                    quantidade,
+                    valor_total,
+                    dados_pix["status"],
+                    dados_pix["payment_id"],
+                    jogos_liberados,
+                    funcao=funcao or descricao,
+                    email_pagador=str(estado.get("email_cliente", "")),
+                    conteudo_liberado=conteudo_liberado if estado["aprovado"] else "",
+                )
                 st.rerun()
             except Exception as erro:
                 st.error(f"Falha ao consultar pagamento PIX: {erro}")
@@ -930,6 +978,28 @@ def render_gate_pagamento_pix(chave: str, concurso_alvo: int, quantidade_palpite
     st.session_state.pagamento_aprovado = False
     st.session_state.palpites_liberados = 0
     return False
+
+
+def exigir_pagamento_para_funcao(
+    chave_funcao: str,
+    nome_funcao: str,
+    valor: float = 1.00,
+    quantidade: int = 1,
+    concurso_alvo: int | None = None,
+) -> bool:
+    quantidade = max(1, int(quantidade))
+    concurso = int(concurso_alvo or 0)
+    st.session_state.setdefault(f"pagamento_aprovado_{chave_funcao}", False)
+    if float(valor) != 1.00:
+        st.caption("Valor configurado diferente do padrao. A cobranca atual usa R$ 1,00 por unidade.")
+    return render_gate_pagamento_pix(
+        chave_funcao,
+        concurso,
+        quantidade,
+        nome_funcao,
+        funcao=nome_funcao,
+        conteudo_liberado=nome_funcao,
+    )
 
 
 def consumir_pagamento_aprovado(chave: str, quantidade_palpites: int) -> bool:
@@ -1669,17 +1739,7 @@ def render_gerador_inteligente(df: pd.DataFrame) -> None:
         step=1,
     )
 
-    pagamento_liberado = render_gate_pagamento_pix(
-        "geracao_jogos",
-        concurso_alvo,
-        int(quantidade),
-        f"Geração de Jogos - {tipo_geracao}",
-    )
-
-    if st.button("Gerar Jogo Inteligente", type="primary", disabled=not pagamento_liberado):
-        if not consumir_pagamento_aprovado("geracao_jogos", int(quantidade)):
-            st.warning("Realize um novo pagamento PIX antes de gerar novos palpites.")
-            return
+    if st.button("Gerar Jogo Inteligente", type="primary"):
         try:
             with st.spinner("Gerando jogos inteligentes."):
                 jogos = gerar_varios_jogos_inteligentes(df, quantidade=int(quantidade))
@@ -1735,17 +1795,7 @@ def render_previsao_sorteio(df: pd.DataFrame) -> None:
     quantidade = st.number_input("Quantidade de previsões", min_value=1, max_value=20, value=5, step=1, key="previsao_quantidade")
     janela = st.number_input("Janela histórica da previsão", min_value=20, max_value=max(20, len(df)), value=min(500, len(df)), step=20, key="previsao_janela")
 
-    pagamento_liberado = render_gate_pagamento_pix(
-        "previsao_sorteio",
-        concurso_alvo,
-        int(quantidade),
-        "Previsão do Sorteio",
-    )
-
-    if st.button("Gerar previsão do sorteio", type="primary", disabled=not pagamento_liberado):
-        if not consumir_pagamento_aprovado("previsao_sorteio", int(quantidade)):
-            st.warning("Realize um novo pagamento PIX antes de gerar novos palpites.")
-            return
+    if st.button("Gerar previsão do sorteio", type="primary"):
         try:
             with st.spinner("Calculando previsão estatística do próximo sorteio."):
                 historico = df.sort_values("Concurso", ascending=False).head(int(janela))
@@ -1826,17 +1876,7 @@ def render_previsao_concurso_alvo(df: pd.DataFrame) -> None:
         step=1,
         key="previsao_alvo_quantidade_paga",
     )
-    pagamento_liberado = render_gate_pagamento_pix(
-        "previsao_concurso_alvo",
-        concurso_alvo,
-        int(quantidade_palpites),
-        "Previsão do Próximo Concurso",
-    )
-
-    if st.button("Gerar previsão para concurso alvo", type="primary", disabled=not pagamento_liberado):
-        if not consumir_pagamento_aprovado("previsao_concurso_alvo", int(quantidade_palpites)):
-            st.warning("Realize um novo pagamento PIX antes de gerar novos palpites.")
-            return
+    if st.button("Gerar previsão para concurso alvo", type="primary"):
         try:
             with st.spinner(f"Calculando previsão estatística para o concurso alvo {concurso_alvo}."):
                 pacote = gerar_previsao_concurso_alvo(df, concurso_alvo)
@@ -3011,20 +3051,43 @@ def main() -> None:
     menos = dezenas_menos_sorteadas(df, limite=10)
     area_resultado_topo = st.container()
     with area_resultado_topo:
-        if secao == "Visão Geral":
+        pagamentos_funcoes = {
+            "Resultados": ("resultados", "Resultados"),
+            "Motor Elite 9": ("motor_elite_9", "Motor Elite 9"),
+            "Banco Mestre": ("banco_mestre", "Banco Mestre"),
+            "Elite X": ("elite_x", "Elite X"),
+            "Bolões": ("boloes", "Bolões"),
+            "Auditorias": ("auditorias", "Auditorias"),
+            "Exportações": ("exportacoes", "Exportações"),
+            "Geração de Jogos": ("geracao_jogos", "Geração de Jogos"),
+            "Previsão do Sorteio": ("previsao", "Previsão do Próximo Concurso"),
+            "Previsão do Próximo Concurso": ("previsao", "Previsão do Próximo Concurso"),
+        }
+        secao_render = secao
+        if secao in pagamentos_funcoes:
+            chave_funcao, nome_funcao = pagamentos_funcoes[secao]
+            if not exigir_pagamento_para_funcao(
+                chave_funcao,
+                nome_funcao,
+                valor=1.00,
+                quantidade=1,
+                concurso_alvo=obter_concurso_alvo_previsao(df),
+            ):
+                secao_render = "__bloqueado__"
+        if secao_render == "Visão Geral":
             st.dataframe(mais, width="stretch", hide_index=True)
             st.dataframe(menos, width="stretch", hide_index=True)
             render_analise_avancada(df)
-        elif secao == "Resultados":
+        elif secao_render == "Resultados":
             st.subheader("Resultados carregados")
             st.dataframe(df.head(30), width="stretch", hide_index=True)
             st.dataframe(mais, width="stretch", hide_index=True)
             st.dataframe(menos, width="stretch", hide_index=True)
             st.plotly_chart(grafico_frequencia(df), width="stretch")
             render_dezenas_quentes_frias(df)
-        elif secao == "Motor Elite 9":
+        elif secao_render == "Motor Elite 9":
             render_motor_elite_9(df)
-        elif secao == "Banco Mestre":
+        elif secao_render == "Banco Mestre":
             render_banco_mestre_elite_9()
             st.divider()
             tamanho_banco = st.selectbox("Tamanho do Banco Mestre PRO", [15, 18, 20, 25, 30, 40], index=4, key="banco_mestre_principal_tamanho")
@@ -3046,26 +3109,26 @@ def main() -> None:
             if isinstance(banco, pd.DataFrame) and not banco.empty:
                 st.markdown(dezenas_html(banco["Dezena"].astype(int).tolist()), unsafe_allow_html=True)
                 st.dataframe(banco, width="stretch", hide_index=True)
-        elif secao == "Elite X":
+        elif secao_render == "Elite X":
             render_motor_elite_x(df)
             st.divider()
             render_elite_x_fechamento(df)
             st.divider()
             render_elite_x_pro(df)
-        elif secao == "Bolões":
+        elif secao_render == "Bolões":
             render_boloes(df)
-        elif secao == "Auditorias":
+        elif secao_render == "Auditorias":
             render_auditoria_elite_9()
             st.divider()
             render_backtest_historico(df)
-        elif secao == "Exportações":
+        elif secao_render == "Exportações":
             render_exportacoes()
-        elif secao == "Geração de Jogos":
+        elif secao_render == "Geração de Jogos":
             render_card_resultado_topo("Resultado gerado", "Geração de Jogos")
             render_gerador_inteligente(df)
             st.divider()
             render_ranking_melhores_jogos(df)
-        elif secao in {"Previsão do Sorteio", "Previsão do Próximo Concurso"}:
+        elif secao_render in {"Previsão do Sorteio", "Previsão do Próximo Concurso"}:
             render_card_resultado_topo("Pagamento PIX", "Previsão do Próximo Concurso")
             render_previsao_concurso_alvo(df)
     render_upload_csv_base_topo()
@@ -3103,6 +3166,7 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
 
 
 

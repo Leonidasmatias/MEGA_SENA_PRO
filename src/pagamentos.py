@@ -27,22 +27,28 @@ def registrar_pagamento(
     status_pagamento: str,
     payment_id: str | int | None,
     jogos_liberados: int,
+    funcao: str = "",
+    email_pagador: str = "",
+    conteudo_liberado: str = "",
 ) -> None:
     CAMINHO_LOG_PAGAMENTOS.parent.mkdir(parents=True, exist_ok=True)
     linha = {
         "data_hora": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "funcao": str(funcao),
         "concurso_alvo": int(concurso_alvo),
         "quantidade_palpites": int(quantidade_palpites),
         "valor_total": round(float(valor_total), 2),
         "status_pagamento": str(status_pagamento),
         "payment_id": "" if payment_id is None else str(payment_id),
+        "email_pagador": str(email_pagador),
         "jogos_liberados": int(jogos_liberados),
+        "conteudo_liberado": str(conteudo_liberado),
     }
-    df = pd.DataFrame([linha])
-    df.to_csv(
-        CAMINHO_LOG_PAGAMENTOS,
-        mode="a",
-        header=not CAMINHO_LOG_PAGAMENTOS.exists(),
-        index=False,
-        encoding="utf-8-sig",
-    )
+    novo = pd.DataFrame([linha])
+    if CAMINHO_LOG_PAGAMENTOS.exists():
+        try:
+            atual = pd.read_csv(CAMINHO_LOG_PAGAMENTOS)
+            novo = pd.concat([atual, novo], ignore_index=True, sort=False)
+        except Exception:
+            pass
+    novo.to_csv(CAMINHO_LOG_PAGAMENTOS, index=False, encoding="utf-8-sig")

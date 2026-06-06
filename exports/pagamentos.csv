@@ -1,2 +1,2 @@
-﻿data_hora,concurso_alvo,quantidade_palpites,valor_total,status_pagamento,payment_id,jogos_liberados
-2026-06-06 02:30:11,3013,5,5.0,erro_criacao,,0
+﻿data_hora,funcao,concurso_alvo,quantidade_palpites,valor_total,status_pagamento,payment_id,email_pagador,jogos_liberados,conteudo_liberado
+2026-06-06 02:30:11,,3013,5,5.0,erro_criacao,,,0,
