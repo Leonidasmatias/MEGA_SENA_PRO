@@ -1,13 +1,14 @@
 from __future__ import annotations
 
-import base64
 from datetime import datetime
 from io import BytesIO
+import json
 from pathlib import Path
 import random
 
 import pandas as pd
 import streamlit as st
+import streamlit.components.v1 as components
 
 from src.carregar_dados import (
     CAMINHO_BASE_PADRAO,
@@ -775,13 +776,103 @@ def render_gate_pagamento_pix(chave: str, concurso_alvo: int, quantidade_palpite
             registrar_pagamento(concurso_alvo, quantidade, valor_total, "erro_criacao", "", 0)
             st.error(f"Falha ao criar cobrança PIX: {erro}")
 
+    valor_formatado = f"R$ {valor_total:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
     if estado.get("qr_code_base64"):
-        st.image(base64.b64decode(estado["qr_code_base64"]), caption="QR Code PIX")
+        st.markdown(
+            f"""
+            <style>
+                .pix-payment-card {{
+                    background: #FFFFFF;
+                    padding: 20px;
+                    border-radius: 16px;
+                    text-align: center;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+                    margin: 18px auto 20px auto;
+                    max-width: 360px;
+                    width: 100%;
+                    box-sizing: border-box;
+                    overflow: hidden;
+                }}
+                .pix-qr-img {{
+                    display: block;
+                    width: 300px !important;
+                    max-width: 300px !important;
+                    height: auto !important;
+                    aspect-ratio: 1 / 1;
+                    margin: 0 auto;
+                    border-radius: 12px;
+                }}
+                @media (max-width: 900px) {{
+                    .pix-payment-card {{
+                        max-width: 310px;
+                    }}
+                    .pix-qr-img {{
+                        width: 250px !important;
+                        max-width: 250px !important;
+                    }}
+                }}
+                @media (max-width: 480px) {{
+                    .pix-payment-card {{
+                        max-width: 260px;
+                        padding: 16px;
+                    }}
+                    .pix-qr-img {{
+                        width: 220px !important;
+                        max-width: 220px !important;
+                    }}
+                }}
+            </style>
+            <div class="pix-payment-card">
+                <div style="font-size: 18px; font-weight: 800; color: #111827; margin-bottom: 6px;">
+                    Pagamento PIX
+                </div>
+                <div style="font-size: 15px; font-weight: 700; color: #065F46; margin-bottom: 16px;">
+                    Valor: {valor_formatado}
+                </div>
+                <img
+                    class="pix-qr-img"
+                    src="data:image/png;base64,{estado['qr_code_base64']}"
+                    width="300"
+                    height="300"
+                    alt="QR Code PIX"
+                >
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
     if estado.get("qr_code"):
+        codigo_pix_json = json.dumps(str(estado["qr_code"]))
+        components.html(
+            f"""
+            <div style="text-align:center; margin: -6px 0 10px 0;">
+                <button
+                    onclick='navigator.clipboard.writeText({codigo_pix_json}).then(() => {{
+                        const msg = document.getElementById("copiado-{chave}");
+                        msg.innerText = "Código PIX copiado.";
+                    }});'
+                    style="
+                        background: #005CA9;
+                        color: #FFFFFF;
+                        border: 0;
+                        border-radius: 10px;
+                        padding: 11px 18px;
+                        font-weight: 800;
+                        cursor: pointer;
+                        box-shadow: 0 8px 18px rgba(0,92,169,0.18);
+                    "
+                >
+                    COPIAR PIX
+                </button>
+                <div id="copiado-{chave}" style="margin-top: 8px; color: #065F46; font-weight: 700; font-size: 13px;"></div>
+            </div>
+            """,
+            height=72,
+        )
         st.text_area("Código PIX copia e cola", estado["qr_code"], height=120, key=f"copia_cola_pix_{chave}")
     if estado.get("payment_id"):
         st.caption(f"Status: Aguardando pagamento | Payment ID: {estado['payment_id']}")
-        if st.button("Verificar pagamento", key=f"verificar_pix_{chave}"):
+        st.info("Após o pagamento, clique em Verificar pagamento.")
+        if st.button("Verificar pagamento", key=f"verificar_pix_{chave}", type="primary"):
             token = obter_token_mercado_pago()
             try:
                 resposta = consultar_pagamento_pix(token, estado["payment_id"])
