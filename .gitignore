@@ -12,3 +12,8 @@ BACKUP_*/
 *.log
 .DS_Store
 Thumbs.db
+build/
+dist/
+*.exe
+EliteX_Portatil.zip
+__pycache__/
