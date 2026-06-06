@@ -391,32 +391,55 @@ def corrigir_interface_visual() -> None:
             vertical-align: -1px;
         }
 
-        @keyframes pulseGreen {
-            0% { box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.7), 0 10px 24px rgba(22, 163, 74, .30) !important; }
-            70% { box-shadow: 0 0 0 14px rgba(22, 163, 74, 0), 0 10px 24px rgba(22, 163, 74, .30) !important; }
-            100% { box-shadow: 0 0 0 0 rgba(22, 163, 74, 0), 0 10px 24px rgba(22, 163, 74, .30) !important; }
+        @keyframes ledPulse {
+            0% {
+                box-shadow: 0 0 6px #22c55e, 0 0 12px #22c55e, 0 10px 24px rgba(22, 163, 74, .28) !important;
+                background: #16A34A !important;
+                transform: scale(1);
+            }
+            50% {
+                box-shadow: 0 0 18px #00ff66, 0 0 36px #00ff66, 0 0 54px #00ff66, 0 14px 32px rgba(0, 255, 102, .32) !important;
+                background: #00C853 !important;
+                transform: scale(1.03);
+            }
+            100% {
+                box-shadow: 0 0 6px #22c55e, 0 0 12px #22c55e, 0 10px 24px rgba(22, 163, 74, .28) !important;
+                background: #16A34A !important;
+                transform: scale(1);
+            }
         }
 
         .mega-previsao-menu div.stButton > button {
             background: #16A34A !important;
             color: #FFFFFF !important;
-            border: 0 !important;
-            border-radius: 999px !important;
-            min-height: 50px !important;
-            font-size: 16px !important;
+            border: 2px solid #00ff66 !important;
+            border-radius: 14px !important;
+            min-height: 58px !important;
+            font-size: 17px !important;
             font-weight: 900 !important;
-            box-shadow: 0 10px 24px rgba(22, 163, 74, .30) !important;
-            animation: pulseGreen 2.4s infinite;
+            letter-spacing: .02em !important;
+            box-shadow: 0 0 8px #22c55e, 0 0 18px rgba(34, 197, 94, .75) !important;
+            animation: ledPulse 1.4s infinite ease-in-out;
         }
 
         .mega-previsao-menu div.stButton > button * {
             color: #FFFFFF !important;
+            font-weight: 900 !important;
         }
 
         .mega-previsao-menu div.stButton > button:hover {
-            background: #15803D !important;
+            background: #00C853 !important;
             color: #FFFFFF !important;
-            transform: translateY(-1px);
+            border-color: #86EFAC !important;
+            transform: scale(1.035);
+        }
+
+        .mega-previsao-hint {
+            margin: -4px 0 14px 0;
+            text-align: center;
+            color: #065F46;
+            font-size: 13px;
+            font-weight: 800;
         }
 
         .ux-previsao-card {
@@ -454,9 +477,13 @@ def corrigir_interface_visual() -> None:
 
         @media (max-width: 760px) {
             .mega-previsao-menu div.stButton > button {
-                min-height: 56px !important;
+                min-height: 62px !important;
                 font-size: 15px !important;
                 white-space: normal !important;
+            }
+            .mega-previsao-hint {
+                font-size: 12px;
+                margin-bottom: 12px;
             }
             .ux-previsao-card {
                 padding: 20px;
@@ -539,10 +566,14 @@ def render_menu_visual() -> None:
                 st.rerun()
     st.markdown('<div class="mega-previsao-menu">', unsafe_allow_html=True)
     ativo_previsao = st.session_state.get("aba_ativa") == "Previsão do Próximo Concurso"
-    label_previsao = "• 🎯 Prever Próximo Sorteio" if ativo_previsao else "🎯 Prever Próximo Sorteio"
+    label_previsao = "• 🎯 PREVER PRÓXIMO SORTEIO" if ativo_previsao else "🎯 PREVER PRÓXIMO SORTEIO"
     if st.button(label_previsao, key="menu_secao_Previsão do Próximo Concurso", use_container_width=True):
         st.session_state.aba_ativa = "Previsão do Próximo Concurso"
         st.rerun()
+    st.markdown(
+        '<div class="mega-previsao-hint">Clique aqui para gerar seus números do próximo sorteio</div>',
+        unsafe_allow_html=True,
+    )
     st.markdown("</div>", unsafe_allow_html=True)
     st.markdown("</div>", unsafe_allow_html=True)
 
