@@ -426,6 +426,18 @@ def render_topo_institucional() -> None:
             <div class="mega-breadcrumb">Início &rsaquo; Produtos &rsaquo; Loterias &rsaquo; Mega-Sena Pro</div>
             <h1 class="mega-title">Mega-Sena Pro</h1>
             <div class="mega-subtitle">Sistema inteligente de análise, geração e gestão de jogos</div>
+            <div style="
+                display:inline-block;
+                font-size:14px;
+                color:#6B7280;
+                background:rgba(255,255,255,0.88);
+                border-radius:8px;
+                padding:4px 10px;
+                margin-top:8px;
+                font-weight:650;
+            ">
+                Criado por Leônidas Aparecido Matias
+            </div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -513,46 +525,60 @@ def render_assinatura_criador() -> None:
     st.markdown(
         """
         <div style="
-            background:#FFFFFF;
-            border:1px solid #E5E7EB;
-            border-radius:16px;
-            padding:24px;
-            box-shadow:0 8px 24px rgba(15,23,42,0.08);
+            background:#F3F4F6;
+            border-top:1px solid #D1D5DB;
+            padding:28px 18px;
             margin-top:24px;
             color:#1F2937;
             line-height:1.55;
+            text-align:center;
+            font-size:14px;
         ">
-            <div style="font-size:20px;font-weight:850;color:#003F7D;margin-bottom:10px;">
+            <div style="font-size:20px;font-weight:850;color:#003F7D;margin-bottom:8px;">
                 Mega-Sena Pro®
             </div>
-            <div style="font-size:15px;font-weight:700;">
+            <div style="font-weight:700;margin-bottom:6px;">
                 Desenvolvido por Leônidas Aparecido Matias
             </div>
-            <div style="font-size:14px;margin-top:10px;">
-                Supervisor de Telecomunicações<br>
-                Engenheiro Eletricista
+            <div style="color:#374151;margin-bottom:14px;">
+                Supervisor de Telecomunicações | Engenheiro Eletricista
             </div>
-            <div style="font-size:13px;margin-top:14px;color:#475569;">
-                Versão Oficial: ELITE_X_STABLE_3012<br>
-                Motor Elite 9
-            </div>
-            <div style="font-size:13px;margin-top:14px;">
-                <strong>Contato:</strong><br>
+            <div style="margin-bottom:12px;">
                 📱 WhatsApp: (11) 93729-9687
             </div>
-            <div style="font-size:13px;margin-top:14px;">
-                <strong>LinkedIn:</strong><br>
-                <a href="https://www.linkedin.com/in/leônidas-matias-8a722466/" target="_blank">
-                    https://www.linkedin.com/in/leônidas-matias-8a722466/
-                </a>
-            </div>
-            <div style="font-size:13px;margin-top:14px;">
+            <div style="margin-bottom:10px;">
                 <strong>GitHub:</strong><br>
-                <a href="https://github.com/Leonidasmatias" target="_blank">
+                <a href="https://github.com/Leonidasmatias" target="_blank" style="color:#005CA9;text-decoration:none;">
                     https://github.com/Leonidasmatias
                 </a>
             </div>
-            <div style="font-size:12px;margin-top:16px;color:#64748B;">
+            <div style="margin-bottom:18px;">
+                <strong>LinkedIn:</strong><br>
+                <a href="https://www.linkedin.com/in/leônidas-matias-8a722466/" target="_blank" style="color:#005CA9;text-decoration:none;">
+                    https://www.linkedin.com/in/leônidas-matias-8a722466/
+                </a>
+            </div>
+            <div style="
+                max-width:460px;
+                margin:0 auto 18px auto;
+                padding:18px;
+                border-top:1px solid #D1D5DB;
+                border-bottom:1px solid #D1D5DB;
+                color:#111827;
+            ">
+                <div style="font-weight:850;margin-bottom:8px;">🏷️ VERSÃO OFICIAL EM PRODUÇÃO</div>
+                <div style="font-weight:800;color:#003F7D;margin-bottom:8px;">ELITE_X_PRODUCAO_3012</div>
+                <div>Motor Elite 9</div>
+                <div style="margin-top:10px;">
+                    <strong>Base Histórica:</strong><br>
+                    3012 concursos
+                </div>
+                <div style="margin-top:10px;">
+                    <strong>Status:</strong><br>
+                    🟢 PRODUÇÃO
+                </div>
+            </div>
+            <div style="font-size:12px;color:#4B5563;">
                 Copyright © 2026<br>
                 Todos os direitos reservados.
             </div>
@@ -3234,6 +3260,7 @@ def main() -> None:
 
     st.divider()
     st.caption("Este projeto não possui vínculo com a Caixa Econômica Federal. Use com responsabilidade.")
+    st.success("🟢 ELITE_X_PRODUCAO_3012 | Produção")
     render_assinatura_criador()
 
 
