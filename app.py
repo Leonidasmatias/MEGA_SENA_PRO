@@ -477,6 +477,39 @@ def corrigir_interface_visual() -> None:
             font-weight: 850;
         }
 
+        .premio-publico-card {
+            background: linear-gradient(135deg, #ECFDF5 0%, #FEF3C7 100%);
+            border: 1.5px solid #86EFAC;
+            border-left: 8px solid #16A34A;
+            border-radius: 18px;
+            padding: 20px 22px;
+            margin: 14px 0 16px 0;
+            text-align: center;
+            box-shadow: 0 14px 30px rgba(22, 163, 74, .14);
+        }
+
+        .premio-publico-label {
+            color: #065F46;
+            font-size: 17px;
+            font-weight: 900;
+            margin-bottom: 8px;
+        }
+
+        .premio-publico-valor {
+            color: #064E3B;
+            font-size: 34px;
+            line-height: 1.1;
+            font-weight: 950;
+            margin-bottom: 10px;
+        }
+
+        .premio-publico-info {
+            color: #374151;
+            font-size: 15px;
+            font-weight: 800;
+            line-height: 1.5;
+        }
+
         .ux-previsao-card {
             background: linear-gradient(135deg, #ECFDF5 0%, #FFFFFF 62%, #F0FDF4 100%);
             border: 1px solid #BBF7D0;
@@ -522,6 +555,15 @@ def corrigir_interface_visual() -> None:
             .mega-previsao-hint {
                 font-size: 12px;
                 margin-bottom: 12px;
+            }
+            .premio-publico-card {
+                padding: 18px 14px;
+            }
+            .premio-publico-valor {
+                font-size: 27px;
+            }
+            .premio-publico-info {
+                font-size: 14px;
             }
             .ux-previsao-card {
                 padding: 20px;
@@ -590,8 +632,10 @@ def render_topo_institucional() -> None:
     )
 
 
-def render_menu_visual() -> None:
+def render_menu_visual(df: pd.DataFrame | None = None) -> None:
     admin = modo_admin_ativo()
+    texto_premio_cta = "o prêmio estimado oficial"
+    concurso_fluxo_publico = "oficial"
     st.markdown('<div class="mega-menu-toolbar">', unsafe_allow_html=True)
     if admin:
         secoes_normais = [secao for secao in SECOES_APP if secao != "Previsão do Próximo Concurso"]
@@ -610,6 +654,18 @@ def render_menu_visual() -> None:
             """
             <div class="ux-previsao-card">
                 <div class="ux-previsao-title">🍀 Gere seus números da sorte para o próximo sorteio da Mega-Sena</div>
+            </div>
+        """,
+            unsafe_allow_html=True,
+        )
+        if df is not None:
+            dados_premio_publico = render_card_premio_estimado_publico(df)
+            texto_premio_cta = dados_premio_publico["texto_premio_cta"]
+            concurso_fluxo_publico = dados_premio_publico["concurso_fluxo"]
+            st.session_state.concurso_fluxo_publico = concurso_fluxo_publico
+        st.markdown(
+            """
+            <div class="ux-previsao-card" style="margin-top:0;">
                 <div class="ux-previsao-text">
                     Informe seu e-mail, gere o PIX de R$ 1,00 e desbloqueie seus números da sorte para o próximo sorteio.
                 </div>
@@ -625,7 +681,7 @@ def render_menu_visual() -> None:
         st.session_state.aba_ativa = "Previsão do Próximo Concurso"
         st.rerun()
     st.markdown(
-        '<div class="mega-previsao-hint">🍀 Descubra seus números da sorte para concorrer ao próximo prêmio de R$ 32 milhões</div>',
+        f'<div class="mega-previsao-hint">🍀 Descubra seus números da sorte para concorrer ao próximo prêmio estimado de {texto_premio_cta}</div>',
         unsafe_allow_html=True,
     )
     st.markdown("</div>", unsafe_allow_html=True)
@@ -715,6 +771,72 @@ def render_card_ux_previsao_leigo(df: pd.DataFrame) -> None:
         """,
         unsafe_allow_html=True,
     )
+
+
+def obter_premio_estimado_publico(df: pd.DataFrame) -> dict:
+    metadados = obter_metadados_concurso_alvo_previsao(df)
+    info_caixa = metadados.get("info_caixa") if isinstance(metadados.get("info_caixa"), dict) else {}
+    premio = metadados.get("premio_estimado") or ""
+    premio_indisponivel = premio in {"", "N/D", "Consultar CAIXA"}
+    fonte_concurso = metadados.get("fonte")
+    concurso_disponivel = fonte_concurso in {"CAIXA", "card"} and bool(metadados.get("concurso_alvo"))
+    return {
+        "concurso_alvo": metadados.get("concurso_alvo") if concurso_disponivel else None,
+        "data_sorteio": metadados.get("data_provavel") or "Indisponivel",
+        "premio_estimado": "" if premio_indisponivel else premio,
+        "acumulou": info_caixa.get("acumulou"),
+        "fonte": fonte_concurso,
+    }
+
+
+def render_card_premio_estimado_publico(df: pd.DataFrame) -> dict:
+    premio_publico = obter_premio_estimado_publico(df)
+    concurso = premio_publico.get("concurso_alvo")
+    data_sorteio = premio_publico.get("data_sorteio") or "Indisponivel"
+    premio = premio_publico.get("premio_estimado") or ""
+    if concurso:
+        concurso_html = f'<div class="premio-publico-info"><strong>🎯 Concurso alvo:</strong><br>{concurso}</div>'
+        texto_confianca = f"Esta previsão será gerada para o concurso {concurso}, conforme atualização oficial disponível."
+        texto_concurso_fluxo = str(concurso)
+    else:
+        concurso_html = (
+            '<div class="premio-publico-info"><strong>🎯 Concurso alvo:</strong><br>'
+            "Concurso aguardando atualização oficial.</div>"
+        )
+        texto_confianca = "Esta previsão será gerada assim que houver atualização oficial disponível."
+        texto_concurso_fluxo = "oficial"
+    if premio:
+        valor_html = f'<div class="premio-publico-valor">{premio}</div>'
+        texto_hint = premio
+    else:
+        valor_html = (
+            '<div class="premio-publico-valor" style="font-size:24px;">'
+            "Prêmio estimado aguardando atualização oficial."
+            "</div>"
+        )
+        texto_hint = "o prêmio estimado oficial"
+
+    st.markdown(
+        f"""
+        <div class="premio-publico-card">
+            {concurso_html}
+            <div class="premio-publico-label" style="margin-top:14px;">💰 Prêmio estimado:</div>
+            {valor_html}
+            <div class="premio-publico-info">
+                <strong>📅 Data do sorteio:</strong><br>
+                {data_sorteio}
+            </div>
+            <div class="premio-publico-info" style="margin-top:14px;color:#065F46;">
+                {texto_confianca}
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    return {
+        "texto_premio_cta": texto_hint,
+        "concurso_fluxo": texto_concurso_fluxo,
+    }
 
 
 def render_assinatura_criador() -> None:
@@ -1105,7 +1227,12 @@ def render_gate_pagamento_pix(
             st.info(f"{st.session_state.palpites_liberados} palpite(s) liberado(s).")
         return True
 
-    texto_botao_criar = "💳 Gerar QR Code PIX de R$ 1,00" if previsao_leigo else "Criar cobrança PIX"
+    concurso_fluxo = st.session_state.get("concurso_fluxo_publico") or concurso_alvo
+    texto_botao_criar = (
+        f"💳 Gerar números da sorte para o concurso {concurso_fluxo}"
+        if previsao_leigo
+        else "Criar cobrança PIX"
+    )
     if previsao_leigo:
         st.markdown(
             """
@@ -3370,7 +3497,6 @@ def main() -> None:
     corrigir_interface_visual()
     admin = modo_admin_ativo()
     render_topo_institucional()
-    render_menu_visual()
     render_mensagens_estado()
 
     if st.session_state.pop("base_oficial_atualizada", False):
@@ -3396,6 +3522,7 @@ def main() -> None:
     if df is None:
         st.stop()
 
+    render_menu_visual(df)
     secao = render_secao_ativa()
     mais = dezenas_mais_sorteadas(df, limite=10)
     menos = dezenas_menos_sorteadas(df, limite=10)
